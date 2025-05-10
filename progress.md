@@ -11,3 +11,8 @@
 5. 請依所有指示更新。
    => 已完成。所有程式碼及註解均使用英文，README.md 也已更新，記載新功能。
 6. llm-loadtest.py 請全面檢視，還有很多中文。
+7. 請將原始壓測的結果，全部儲存到 `./Results/{model}_{dataset-name}_{prompts-list}_{seq}.raw.txt`。另將所有結果值，以 tab 間隔字元格式，收集到 `./Results/{model}_{dataset-name}_{prompts-list}_{seq}.results.txt`。最後的螢幕顯示結果，請依原始壓測的格式完整呈現。
+8. #terminalSelection 請注意 model 名稱會有 / 字元，請規範化為合法檔名字元 (如 _) 後再儲存。
+9. 我要完整的原始壓測資料，目前收集的資料不完整，包括 raw/results.txt 都需要更新。
+10. 前面的不對，我不要 JSON 格式，我要 raw.txt 與原始壓測的螢幕輸出格式一致， results.txt 收集資料項目也一致，其他多餘的都不要。
+11. #terminalSelection 請仔細檢查，benchmark_serving.py 的輸出與 llm-loadtest.py 的輸出不一樣。我要 benchmark_serving.py 一模一樣的輸出，儲存到 raw.txt 中，也要顯示出來。而 results.txt 裡面的欄位值，也要與 benchmark_serving.py 的輸出值項目一致。

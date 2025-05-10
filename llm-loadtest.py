@@ -18,12 +18,15 @@ Usage:
 
 import argparse
 import asyncio
+import datetime
 import gc
+import io
 import os
 import random
 import sys
 import time
 from typing import List, Optional, Any, Dict
+import contextlib
 
 # Adjust Python's module search path to make relative imports in benchmarks directory work correctly
 import os.path
@@ -55,7 +58,7 @@ async def run_benchmark(backend: str,
                         tokenizer: Any,
                         dataset: Any,
                         num_prompts: int,
-                        args: argparse.Namespace) -> Dict[str, Any]:
+                        args: argparse.Namespace):
     """Run a single benchmark test with the specified num_prompts value"""
     
     print(f"\nRunning test with num-prompts = {num_prompts}")
@@ -127,31 +130,33 @@ async def run_benchmark(backend: str,
         sampling_params["temperature"] = 0.0  # Default to greedy decoding
 
     # Run the benchmark test
-    benchmark_result = await benchmark(
-        backend=backend,
-        api_url=api_url,
-        base_url=base_url,
-        model_id=model_id,
-        model_name=model_name,
-        tokenizer=tokenizer,
-        input_requests=input_requests,
-        logprobs=args.logprobs,
-        request_rate=args.request_rate,
-        burstiness=args.burstiness,
-        disable_tqdm=args.disable_tqdm,
-        profile=args.profile,
-        selected_percentile_metrics=args.percentile_metrics.split(","),
-        selected_percentiles=[
-            float(p) for p in args.metric_percentiles.split(",")
-        ],
-        ignore_eos=args.ignore_eos,
-        goodput_config_dict=goodput_config_dict,
-        max_concurrency=args.max_concurrency,
-        lora_modules=args.lora_modules,
-        extra_body=sampling_params,
-    )
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        benchmark_result = await benchmark(
+            backend=backend,
+            api_url=api_url,
+            base_url=base_url,
+            model_id=model_id,
+            model_name=model_name,
+            tokenizer=tokenizer,
+            input_requests=input_requests,
+            logprobs=args.logprobs,
+            request_rate=args.request_rate,
+            burstiness=args.burstiness,
+            disable_tqdm=args.disable_tqdm,
+            profile=args.profile,
+            selected_percentile_metrics=args.percentile_metrics.split(","),
+            selected_percentiles=[
+                float(p) for p in args.metric_percentiles.split(",")
+            ],
+            ignore_eos=args.ignore_eos,
+            goodput_config_dict=goodput_config_dict,
+            max_concurrency=args.max_concurrency,
+            lora_modules=args.lora_modules,
+            extra_body=sampling_params,
+        )
     
-    return benchmark_result
+    return benchmark_result, captured.getvalue()
 
 
 async def main_async(args: argparse.Namespace):
@@ -193,7 +198,22 @@ async def main_async(args: argparse.Namespace):
     # Get the list of num_prompts values to test
     prompts_list = [int(x) for x in args.prompts_list.split(",")]
     
-    # Run benchmark tests for each num_prompts value
+    # Ensure results directory exists
+    results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # Create timestamp for unique filenames
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create base filename for results - normalize model_id to replace invalid path characters
+    prompts_str = args.prompts_list.replace(',', '-')
+    normalized_model_id = model_id.replace('/', '_').replace('\\', '_')
+    base_filename = f"{normalized_model_id}_{args.dataset_name}_{prompts_str}_{timestamp}"
+    raw_file_path = os.path.join(results_dir, f"{base_filename}.raw.txt")
+    results_file_path = os.path.join(results_dir, f"{base_filename}.results.txt")
+    
+    # --- Capture all print to raw_output ---
+    raw_outputs = []
     results = []
     for num_prompts in prompts_list:
         # Avoid GC processing "static" data - reduce pause times
@@ -201,7 +221,7 @@ async def main_async(args: argparse.Namespace):
         gc.freeze()
         
         start_time = time.time()
-        result = await run_benchmark(
+        result, captured_output = await run_benchmark(
             backend=backend,
             api_url=api_url,
             base_url=base_url,
@@ -214,22 +234,54 @@ async def main_async(args: argparse.Namespace):
         )
         end_time = time.time()
         
-        print(f"num-prompts={num_prompts} completed, time elapsed: {end_time - start_time:.2f} seconds")
-        results.append((num_prompts, result))
+        elapsed_time = end_time - start_time
+        # Print and collect the captured output (benchmark_serving.py style)
+        print(captured_output, end="")
+        raw_outputs.append(captured_output)
+        print(f"num-prompts={num_prompts} completed, time elapsed: {elapsed_time:.2f} seconds")
+        raw_outputs.append(f"num-prompts={num_prompts} completed, time elapsed: {elapsed_time:.2f} seconds\n")
+        
+        results.append((num_prompts, result, captured_output))
     
-    # Display summary of all results
-    print("\n{s:{c}^{n}}".format(s=' Load Test Results Summary ', n=50, c='='))
-    for num_prompts, result in results:
-        print(f"num-prompts={num_prompts}:")
-        print(f"  Completed requests: {result['completed']}")
-        print(f"  Request throughput (req/s): {result['request_throughput']:.2f}")
-        print(f"  Output token throughput (tok/s): {result['output_throughput']:.2f}")
-        print(f"  Total token throughput (tok/s): {result['total_token_throughput']:.2f}")
-        if 'median_ttft_ms' in result:
-            print(f"  Median TTFT (ms): {result['median_ttft_ms']:.2f}")
-        if 'median_tpot_ms' in result:
-            print(f"  Median TPOT (ms): {result['median_tpot_ms']:.2f}")
-        print("-" * 50)
+    # --- Save raw.txt (all captured outputs) ---
+    with open(raw_file_path, 'w') as raw_file:
+        for out in raw_outputs:
+            raw_file.write(out)
+    
+    # --- Save results.txt (only Serving Benchmark Result block values) ---
+    # Parse values from captured_output
+    def parse_serving_block(text):
+        # Only parse the block between '============ Serving Benchmark Result ============' and the next '====' or end
+        lines = text.splitlines()
+        in_block = False
+        values = {}
+        for line in lines:
+            if 'Serving Benchmark Result' in line:
+                in_block = True
+                continue
+            if in_block and (line.strip().startswith('=') or line.strip() == ''):
+                break
+            if in_block:
+                if ':' in line:
+                    k, v = line.split(':', 1)
+                    values[k.strip()] = v.strip().split()[0]  # 只取第一個值（數字）
+        return values
+    # Collect all keys in order of first appearance
+    all_keys = []
+    seen = set()
+    for _, _, captured in results:
+        vals = parse_serving_block(captured)
+        for k in vals:
+            if k not in seen:
+                all_keys.append(k)
+                seen.add(k)
+    # Write header
+    with open(results_file_path, 'w') as results_file:
+        results_file.write("\t".join(["num_prompts"] + all_keys) + "\n")
+        for num_prompts, _, captured in results:
+            vals = parse_serving_block(captured)
+            row = [str(num_prompts)] + [vals.get(k, "") for k in all_keys]
+            results_file.write("\t".join(row) + "\n")
 
 
 def main():
