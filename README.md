@@ -22,4 +22,18 @@ uv pip install vllm pandas datasets
 python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b-it --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --num-prompts 1
 ```
 
-Refrence to [benchmarks/README.md](benchmarks/README.md) for other datasets and parameters.
+## Run [llm-loadtest.py](llm-loadtest.py)
+
+The `llm-loadtest.py` script is an optimization tool that runs benchmark tests with different `num-prompts` values while only initializing the environment once, saving execution time between test runs.
+
+```bash
+python3 llm-loadtest.py --backend vllm --model google/gemma-3-1b-it --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --prompts-list 1,2,3
+```
+
+Key features:
+- Performs initialization only once, then runs tests with different prompt counts
+- Supports all standard benchmark_serving.py parameters
+- Produces a summary report comparing results from all test runs
+- Uses `--prompts-list` parameter to define which prompt counts to test (comma-separated)
+
+Refer to [benchmarks/README.md](benchmarks/README.md) for other datasets and parameters.
