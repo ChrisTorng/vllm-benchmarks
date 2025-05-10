@@ -198,19 +198,22 @@ async def main_async(args: argparse.Namespace):
     # Get the list of num_prompts values to test
     prompts_list = [int(x) for x in args.prompts_list.split(",")]
     
-    # Ensure results directory exists
-    results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-    os.makedirs(results_dir, exist_ok=True)
-    
     # Create timestamp for unique filenames
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Create base filename for results - normalize model_id to replace invalid path characters
     prompts_str = args.prompts_list.replace(',', '-')
+    
+    # Normalize model_id to replace invalid path characters
     normalized_model_id = model_id.replace('/', '_').replace('\\', '_')
-    base_filename = f"{normalized_model_id}_{args.dataset_name}_{prompts_str}_{timestamp}"
-    raw_file_path = os.path.join(results_dir, f"{base_filename}.raw.txt")
-    results_file_path = os.path.join(results_dir, f"{base_filename}.results.txt")
+    
+    # Create new directory structure: ./results/{model}_{dataset-name}/
+    results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+    model_dataset_dir = os.path.join(results_dir, f"{normalized_model_id}_{args.dataset_name}")
+    os.makedirs(model_dataset_dir, exist_ok=True)
+    
+    # Create new filename format: {timestamp}_{prompts-list}.*
+    base_filename = f"{timestamp}_{prompts_str}"
+    raw_file_path = os.path.join(model_dataset_dir, f"{base_filename}.raw.txt")
+    results_file_path = os.path.join(model_dataset_dir, f"{base_filename}.results.txt")
     
     # --- Capture all print to raw_output ---
     raw_outputs = []
@@ -259,12 +262,11 @@ async def main_async(args: argparse.Namespace):
             if 'Serving Benchmark Result' in line:
                 in_block = True
                 continue
-            if in_block and (line.strip().startswith('=') or line.strip() == ''):
-                break
-            if in_block:
-                if ':' in line:
-                    k, v = line.split(':', 1)
-                    values[k.strip()] = v.strip().split()[0]  # 只取第一個值（數字）
+            if '==================================================' in line and in_block:
+                break 
+            if in_block and ':' in line:
+                key, value = line.split(":", 1)
+                values[key.strip()] = value.strip()
         return values
     # Collect all keys in order of first appearance
     all_keys = []
@@ -282,6 +284,68 @@ async def main_async(args: argparse.Namespace):
             vals = parse_serving_block(captured)
             row = [str(num_prompts)] + [vals.get(k, "") for k in all_keys]
             results_file.write("\t".join(row) + "\n")
+    
+    # --- Plot result chart ---
+    try:
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        df = pd.read_csv(results_file_path, sep='\t')
+        
+        # Use 'Successful requests' as x-axis if available, otherwise fall back to num_prompts
+        if 'Successful requests' in df.columns:
+            x_values = df['Successful requests']
+            x_label = 'Successful requests'
+        else:
+            # Fall back to num_prompts
+            x_values = df['num_prompts']
+            x_label = 'Number of Prompts'
+        
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        
+        # ax1 is for Output token throughput (tok/s) - Green
+        color_output_throughput = 'tab:green'
+        ax1.set_xlabel(x_label)
+        ax1.set_ylabel('Output token throughput (tok/s)', color=color_output_throughput)
+        output_throughput_values = df['Output token throughput (tok/s)'].astype(float).tolist()
+        l2, = ax1.plot(x_values, output_throughput_values, marker='s', color=color_output_throughput, label='Output token throughput (tok/s)')
+        ax1.tick_params(axis='y', labelcolor=color_output_throughput)
+        ax1.set_ylim(bottom=0)  # Start from 0
+        
+        # ax2 is for Mean TTFT (ms) - Red (now the first right y-axis)
+        ax2 = ax1.twinx()
+        color_ttft = 'tab:red'
+        ttft_values = df['Mean TTFT (ms)'].astype(float).tolist()
+        l3, = ax2.plot(x_values, ttft_values, marker='^', color=color_ttft, label='Mean TTFT (ms)')
+        ax2.set_ylabel('Mean TTFT (ms)', color=color_ttft)
+        ax2.tick_params(axis='y', labelcolor=color_ttft)
+        ax2.set_ylim(bottom=0)  # Start from 0
+        
+        # ax3 is for Mean TPOT (ms) - Purple (now the second right y-axis)
+        ax3 = ax1.twinx()
+        ax3.spines['right'].set_position(('outward', 60)) # Adjusted position for ax2
+        color_tpot = 'tab:purple'
+        tpot_values = df['Mean TPOT (ms)'].astype(float).tolist()
+        l4, = ax3.plot(x_values, tpot_values, marker='v', color=color_tpot, label='Mean TPOT (ms)')
+        ax3.set_ylabel('Mean TPOT (ms)', color=color_tpot)
+        ax3.tick_params(axis='y', labelcolor=color_tpot)
+        ax3.set_ylim(bottom=0)  # Start from 0
+
+        # Legends
+        lns = [l2, l3, l4]
+        labels = [l.get_label() for l in lns]
+        ax1.legend(lns, labels, loc='upper left')
+        
+        plt.title(f'LLM Loadtest Results ({model_id})')
+        plt.tight_layout(pad=4.0)  # Add more padding for the multiple axes
+        
+        # Save the plot - ensure PNG extension is correctly added
+        plot_file_path = os.path.join(model_dataset_dir, f"{base_filename}.png")
+        plt.savefig(plot_file_path)
+        print(f"Plot saved to: {plot_file_path}")
+    except ImportError:
+        print("matplotlib or pandas is not installed. Please install them to enable plotting.")
+    except Exception as e:
+        print(f"Plotting failed: {e}")
 
 
 def main():

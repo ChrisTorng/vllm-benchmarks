@@ -14,7 +14,8 @@ The [benchmarks](benchmarks) folder is a clone from [vllm/benchmarks](https://gi
 
 ## Run [benchmark_serving.py](benchmarks/benchmark_serving.py)
 
-WSL
+This is the original [vllm/benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks).
+
 ```bash
 uv venv
 source .venv/bin/activate
@@ -27,6 +28,7 @@ python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b
 The `llm-loadtest.py` script is an optimization tool that runs benchmark tests with different `num-prompts` values while only initializing the environment once, saving execution time between test runs.
 
 ```bash
+uv pip install matplotlib
 python3 llm-loadtest.py --backend vllm --model google/gemma-3-1b-it --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --prompts-list 1,2,3
 ```
 
@@ -35,5 +37,11 @@ Key features:
 - Supports all standard benchmark_serving.py parameters
 - Produces a summary report comparing results from all test runs
 - Uses `--prompts-list` parameter to define which prompt counts to test (comma-separated)
+- Generates result files in the `results/{model}_{dataset-name}/` directory:
+  - `{timestamp}_{prompts-list}.raw.txt`: Complete console output
+  - `{timestamp}_{prompts-list}.results.txt`: Tab-separated metrics
+  - `{timestamp}_{prompts-list}.png`: Visualization chart
+- Automatically creates visualization using matplotlib showing key metrics with "Successful requests" as X-axis
+- Visualization chart shows Request throughput, Output token throughput, Mean TTFT, and Mean TPOT metrics
 
 Refer to [benchmarks/README.md](benchmarks/README.md) for other datasets and parameters.
