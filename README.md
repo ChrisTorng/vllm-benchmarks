@@ -1,5 +1,7 @@
 # [vllm-benchmarks](https://github.com/ChrisTorng/vllm-benchmarks)
 
+The [benchmarks](benchmarks) folder is a clone from [vllm/benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks).
+
 ## Run [vLLM](https://github.com/vllm-project/vllm/) with LLM [google/gemma-3-1b-it](https://huggingface.co/google/gemma-3-1b-it)
 
 - [vLLM - Installation](https://docs.vllm.ai/en/latest/getting_started/installation.html) 
@@ -10,7 +12,7 @@
   vllm serve "google/gemma-3-1b-it" --disable-log-requests
   ```
 
-## Run [benchmark_serving.py](vllm/benchmark_serving.py)
+## Run [benchmark_serving.py](benchmarks/benchmark_serving.py)
 
 WSL
 ```bash
