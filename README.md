@@ -36,14 +36,15 @@ Key features:
 - Performs initialization only once, then runs tests with different prompt counts
 - Supports all standard benchmark_serving.py parameters
 - Produces a summary report comparing results from all test runs
-- Uses `--prompts-list` parameter to define which prompt counts to test (comma-separated)
-- Generates result files in the `results/{model}_{dataset-name}/` directory:
+- Uses `--prompts-list` parameter to define which prompt counts to test (comma-separated)  - Generates result files in the `results/{model}_{dataset-name}/` directory:
   - `{timestamp}_{prompts-list}.raw.txt`: Complete console output
   - `{timestamp}_{prompts-list}.results.txt`: Tab-separated metrics
   - `{timestamp}_{prompts-list}.png`: Visualization chart
-  - `all.results.txt`: Appends results from all test runs with timestamp information
-  - `average.results.txt`: Aggregates data from all runs, averaging by "Successful requests"
-  - `all.png`: Visualization chart based on averaged data across all runs
+  - `all.1.results.txt`: Appends results from all test runs with Keep flag and timestamp information
+  - `all.2.sorted.txt`: Sorts all results with Keep=1 entries first, then Keep=0, each sorted by "Successful requests" then "timestamp". An empty line separates Keep=1 and Keep=0 entries.
+  - `all.3.average.txt`: Aggregates data from Keep=1 entries only, averaging by "Successful requests" (with values rounded to 2 decimal places)
+  - `all.4.png`: Visualization chart based on averaged data from Keep=1 entries
+- Improved error handling for missing columns and invalid data formats
 - Automatically creates visualization using matplotlib showing key metrics with "Successful requests" as X-axis
 - Visualization chart shows Request throughput, Output token throughput, Mean TTFT, and Mean TPOT metrics
 

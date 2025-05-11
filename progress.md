@@ -34,3 +34,6 @@
 底下使用 Claude 3.7 Sonnet:
 22. 請在保留目前所有的輸出檔 raw.txt/results.txt/png 之外，再增加輸出到同資料夾下的 all.results.txt/average.results.txt 與 all.png。all.results.txt 會以附加的方式，將原本的 results.txt 內容輸出進去，並額外加入第一欄為 timestamp 值 (實際執行該次測試的 timestamp，而非運用於檔名之多次測試之統一 timestamp)。而 average.results.txt 則為由 all.results.txt 內全部資料，依 Succesful requests 排序，而相同 Succesful requests 的多個 rows 取平均值，並刪除 timestamp 欄位後儲存。all.png 則為依據 average.results.txt 的結果，再次繪製相同 png 的折線圖結果。目前有新建的 `plot_llm_loadtest_chart()` 是否有用? 若可用請利用，否之則刪除。
 23. #terminalSelection 修正錯誤。
+24. 目前最後的結果產出 all.1.results.txt/all.3.average.txt/all.4.png，以上檔名我是手動修改，請幫我確認是否全部程式都有改正。我已經手動加第一欄 Keep 在 all.1.results.txt 中，請修改程式，亦在 all.1.results.txt 所有附加結果中，預設加入第一欄 Keep 值為 1。然後再加一個 all.2.sorted.txt 輸出檔，它會讀 all.1.results.txt 內所有值，於所有 rows 中，將 Keep=1 放前面，隔一空行後放 Keep=0 在後面，這兩組內依 Successful requests 排序，若值一樣就依 timestamp 排序。然後生成 all.3.average.txt 時，僅取得 all.2.sortedtxt 裡的 Keep=1 項目而已，略過 Keep=0 項目。
+25. 執行後發現一些問題。目前 all.2.sorted.txt 的筆數較少，經查少了今天的所有資料，是否不小心在 Keep=0 之後的資料都未讀入? 而 all.2.sorted.txt 中 Keep=0 的所有資料，應該與前面 Keep=1 的資料中間隔一個空行。另排序的要求是「這兩組 (Keep=1/0) 內依 Successful requests 排序，若值一樣就依 timestamp 排序」，目前看未滿足 timestamp 排序。再來 all.3.average.txt 中未將 Keep=0 資料均排除，連帶 all.4.png 也包括了 Keep=0 資料。
+26. all.2.sorted.txt 中必須保留 Keep 欄位，而且前面有指定 Keep=1 與 Keep=0 資料中間要多空一空行。這樣在計算 all.3.average.txt 時，才不會誤將 Keep=0 欄位也加入。另 all.3.average.txt 計算平均值時，請截到小數兩位。

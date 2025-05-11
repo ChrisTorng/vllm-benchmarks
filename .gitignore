@@ -1,2 +1,3 @@
 .venv/
-results/
+results/google_gemma-3-1b-it_sonnet/*
+!results/google_gemma-3-1b-it_sonnet/all.*
