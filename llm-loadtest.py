@@ -25,6 +25,7 @@ import os
 import random
 import sys
 import time
+import traceback
 from typing import List, Optional, Any, Dict
 import contextlib
 
@@ -34,6 +35,8 @@ benchmarks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench
 sys.path.insert(0, benchmarks_dir)
 
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # Import required functions and classes from benchmark_serving.py
 from benchmarks.benchmark_serving import (
@@ -48,6 +51,135 @@ from benchmarks.benchmark_serving import (
     check_goodput_args,
     FlexibleArgumentParser,
 )
+
+# Define the plot_llm_loadtest_chart function here, outside main_async
+# This function encapsulates the plotting logic.
+def plot_llm_loadtest_chart(df_source: Any,  # pd.DataFrame or str
+                            output_plot_path: str,
+                            model_id_for_title: str,
+                            x_axis_label_options: List[str],
+                            x_axis_col_options: List[Optional[str]]):
+    """
+    Generates and saves a plot from LLM loadtest results.
+
+    Args:
+        df_source (pd.DataFrame or str): DataFrame or path to a CSV file containing the data.
+        output_plot_path (str): Path to save the generated plot.
+        model_id_for_title (str): Model ID to be used in the plot title.
+        x_axis_label_options (list): Preferred labels for X-axis (e.g., ['Successful requests', 'Number of Prompts']).
+        x_axis_col_options (list): Preferred column names for X-axis (e.g., ['Successful requests', 'num_prompts']).
+    """
+    try:
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import traceback
+
+        if isinstance(df_source, str):
+            if not os.path.exists(df_source) or os.path.getsize(df_source) == 0:
+                print(f"Plotting skipped: Data file {df_source} is empty or does not exist.")
+                plt.close('all') # Close any pre-existing figures
+                return
+            df = pd.read_csv(df_source, sep='\t', engine='python')
+        elif isinstance(df_source, pd.DataFrame):
+            if df_source.empty:
+                print(f"Plotting skipped for {output_plot_path}: DataFrame is empty.")
+                plt.close('all')
+                return
+            df = df_source
+        else:
+            print(f"Plotting skipped for {output_plot_path}: Invalid data source type.")
+            plt.close('all')
+            return
+
+        if df.empty:
+            print(f"Plotting skipped for {output_plot_path}: DataFrame is empty after loading.")
+            plt.close('all')
+            return
+            
+        # Determine X-axis
+        x_values = None
+        x_label = ""
+        
+        primary_x_col = x_axis_col_options[0] if x_axis_col_options and len(x_axis_col_options) > 0 else None
+        primary_x_label = x_axis_label_options[0] if x_axis_label_options and len(x_axis_label_options) > 0 else "X-axis"
+        
+        fallback_x_col = x_axis_col_options[1] if x_axis_col_options and len(x_axis_col_options) > 1 else None
+        fallback_x_label = x_axis_label_options[1] if x_axis_label_options and len(x_axis_label_options) > 1 else "X-axis Fallback"
+
+        if primary_x_col and primary_x_col in df.columns:
+            x_values = df[primary_x_col]
+            x_label = primary_x_label
+        elif fallback_x_col and fallback_x_col in df.columns:
+            x_values = df[fallback_x_col]
+            x_label = fallback_x_label
+        else:
+            valid_cols = [col for col in [primary_x_col, fallback_x_col] if col]
+            print(f"Error for plot {output_plot_path}: None of the preferred X-axis columns {valid_cols} found in data.")
+            plt.close('all')
+            return
+        
+        if x_values.empty or x_values.isnull().all():
+            print(f"Plotting skipped for {output_plot_path}: X-axis data ('{x_label}') is empty or all NaN.")
+            plt.close('all')
+            return
+
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        lines = []
+        
+        y_metrics_config = [
+            {'col': 'Output token throughput (tok/s)', 'color': 'tab:green', 'marker': 's', 'ax_obj': ax1, 'twin_needed': False},
+            {'col': 'Mean TTFT (ms)', 'color': 'tab:red', 'marker': '^', 'twin_needed': True, 'twin_pos': ('outward', 0)},
+            {'col': 'Mean TPOT (ms)', 'color': 'tab:purple', 'marker': 'v', 'twin_needed': True, 'twin_pos': ('outward', 60)},
+        ]
+
+        current_ax = ax1
+        ax1.set_xlabel(x_label)
+
+        for i, metric_cfg in enumerate(y_metrics_config):
+            metric_col = metric_cfg['col']
+            if metric_col in df.columns:
+                if metric_cfg['twin_needed']:
+                    if i == 0: # Should not happen with this config, but as a safeguard
+                         current_ax = ax1.twinx()
+                    else: # For subsequent twin axes
+                         current_ax = ax1.twinx()
+                         current_ax.spines['right'].set_position(metric_cfg['twin_pos'])
+                else: # First metric uses ax1 directly
+                    current_ax = metric_cfg['ax_obj']
+
+                current_ax.set_ylabel(metric_col, color=metric_cfg['color'])
+                metric_values = pd.to_numeric(df[metric_col], errors='coerce').fillna(0)
+                
+                if metric_values.empty or metric_values.isnull().all():
+                    print(f"Warning for plot {output_plot_path}: Metric '{metric_col}' data is empty or all NaN after conversion.")
+                    continue
+
+                line, = current_ax.plot(x_values, metric_values, marker=metric_cfg['marker'], color=metric_cfg['color'], label=metric_col)
+                current_ax.tick_params(axis='y', labelcolor=metric_cfg['color'])
+                current_ax.set_ylim(bottom=0)
+                lines.append(line)
+            else:
+                print(f"Warning for plot {output_plot_path}: Metric '{metric_col}' not found in data.")
+
+        if lines:
+            plot_labels = [l.get_label() for l in lines]
+            ax1.legend(lines, plot_labels, loc='upper left')
+        
+        plt.title(f'LLM Loadtest Results ({model_id_for_title})')
+        fig.tight_layout(pad=4.0)
+        
+        plt.savefig(output_plot_path)
+        print(f"Plot saved to: {output_plot_path}")
+        plt.close(fig)
+
+    except ImportError:
+        print("matplotlib or pandas is not installed. Please install them to enable plotting.")
+        plt.close('all') # Ensure any figures are closed if imports fail mid-process
+    except Exception as e:
+        print(f"Plotting failed for {output_plot_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        plt.close('all')
 
 
 async def run_benchmark(backend: str,
@@ -285,67 +417,115 @@ async def main_async(args: argparse.Namespace):
             row = [str(num_prompts)] + [vals.get(k, "") for k in all_keys]
             results_file.write("\t".join(row) + "\n")
     
+    # --- Create all.results.txt (appends results with timestamp) ---
+    all_results_path = os.path.join(model_dataset_dir, "all.results.txt")
+    
+    # Check if all.results.txt exists, create with header if it doesn't
+    if not os.path.exists(all_results_path) or os.path.getsize(all_results_path) == 0:
+        with open(all_results_path, 'w') as all_results_file:
+            all_results_file.write("\t".join(["timestamp", "num_prompts"] + all_keys) + "\n")
+    
+    # Append current results to all.results.txt with timestamp
+    with open(all_results_path, 'a') as all_results_file:
+        for num_prompts, _, captured in results:
+            vals = parse_serving_block(captured)
+            row = [timestamp, str(num_prompts)] + [vals.get(k, "") for k in all_keys]
+            all_results_file.write("\t".join(row) + "\n")
+    
+    # --- Create average.results.txt (averaged by Successful requests) ---
+    try:
+        # Read the all.results.txt file
+        all_df = pd.read_csv(all_results_path, sep='\t')
+        
+        # Check if 'Successful requests' is in the columns
+        if 'Successful requests' in all_df.columns:
+            # Group by Successful requests and compute the mean for numeric columns
+            numeric_cols = all_df.select_dtypes(include=['number']).columns.tolist()
+            numeric_cols = [col for col in numeric_cols if col != 'timestamp']
+            
+            # For non-numeric columns, keep the first occurrence
+            non_numeric_cols = [col for col in all_df.columns if col not in numeric_cols and col != 'timestamp']
+            
+            # Group and calculate mean for numeric columns
+            if numeric_cols:
+                grouped_numeric = all_df.groupby('Successful requests')[numeric_cols].mean()
+            else:
+                grouped_numeric = pd.DataFrame()
+            
+            # Group and get first value for non-numeric columns
+            if non_numeric_cols:
+                grouped_non_numeric = all_df.groupby('Successful requests')[non_numeric_cols].first()
+            else:
+                grouped_non_numeric = pd.DataFrame()
+            
+            # Combine the results
+            if not grouped_numeric.empty and not grouped_non_numeric.empty:
+                avg_df = pd.concat([grouped_numeric, grouped_non_numeric], axis=1)
+            elif not grouped_numeric.empty:
+                avg_df = grouped_numeric
+            elif not grouped_non_numeric.empty:
+                avg_df = grouped_non_numeric
+            else:
+                avg_df = pd.DataFrame()
+            
+            # Reset index to make 'Successful requests' a regular column
+            if not avg_df.empty:
+                # 檢查是否已經有 'Successful requests' 欄位，如果有則先刪除
+                if 'Successful requests' in avg_df.columns:
+                    temp_column_name = 'tmp_successful_requests'
+                    avg_df = avg_df.rename(columns={'Successful requests': temp_column_name})
+                    avg_df = avg_df.reset_index()
+                    # 如果臨時欄位存在，則刪除，避免重複
+                    if temp_column_name in avg_df.columns:
+                        avg_df = avg_df.drop(columns=[temp_column_name])
+                else:
+                    # 如果不存在，則正常重置索引
+                    avg_df = avg_df.reset_index()
+                
+                # Save the averaged results
+                avg_results_path = os.path.join(model_dataset_dir, "average.results.txt")
+                avg_df.to_csv(avg_results_path, sep='\t', index=False)
+                print(f"Average results saved to: {avg_results_path}")
+                
+                # --- Generate the all.png plot based on average.results.txt ---
+                all_plot_path = os.path.join(model_dataset_dir, "all.png")
+                plot_llm_loadtest_chart(
+                    df_source=avg_df,
+                    output_plot_path=all_plot_path,
+                    model_id_for_title=model_id,
+                    x_axis_label_options=['Successful requests', 'Number of Prompts'],
+                    x_axis_col_options=['Successful requests', 'num_prompts']
+                )
+        else:
+            print("Warning: 'Successful requests' column not found in all.results.txt. Cannot create average.results.txt")
+    except ValueError as ve:
+        if 'cannot insert' in str(ve) and 'already exists' in str(ve):
+            print(f"Error creating average.results.txt or all.png: DataFrame column conflict - {ve}")
+            print("Hint: This may be due to 'Successful requests' column appearing both as index and column.")
+            traceback.print_exc()
+        else:
+            print(f"Error creating average.results.txt or all.png: {ve}")
+            traceback.print_exc()
+    except Exception as e:
+        print(f"Error creating average.results.txt or all.png: {e}")
+        traceback.print_exc()
+    
     # --- Plot result chart ---
     try:
-        import pandas as pd
-        import matplotlib.pyplot as plt
-        df = pd.read_csv(results_file_path, sep='\t')
-        
-        # Use 'Successful requests' as x-axis if available, otherwise fall back to num_prompts
-        if 'Successful requests' in df.columns:
-            x_values = df['Successful requests']
-            x_label = 'Successful requests'
-        else:
-            # Fall back to num_prompts
-            x_values = df['num_prompts']
-            x_label = 'Number of Prompts'
-        
-        fig, ax1 = plt.subplots(figsize=(10, 6))
-        
-        # ax1 is for Output token throughput (tok/s) - Green
-        color_output_throughput = 'tab:green'
-        ax1.set_xlabel(x_label)
-        ax1.set_ylabel('Output token throughput (tok/s)', color=color_output_throughput)
-        output_throughput_values = df['Output token throughput (tok/s)'].astype(float).tolist()
-        l2, = ax1.plot(x_values, output_throughput_values, marker='s', color=color_output_throughput, label='Output token throughput (tok/s)')
-        ax1.tick_params(axis='y', labelcolor=color_output_throughput)
-        ax1.set_ylim(bottom=0)  # Start from 0
-        
-        # ax2 is for Mean TTFT (ms) - Red (now the first right y-axis)
-        ax2 = ax1.twinx()
-        color_ttft = 'tab:red'
-        ttft_values = df['Mean TTFT (ms)'].astype(float).tolist()
-        l3, = ax2.plot(x_values, ttft_values, marker='^', color=color_ttft, label='Mean TTFT (ms)')
-        ax2.set_ylabel('Mean TTFT (ms)', color=color_ttft)
-        ax2.tick_params(axis='y', labelcolor=color_ttft)
-        ax2.set_ylim(bottom=0)  # Start from 0
-        
-        # ax3 is for Mean TPOT (ms) - Purple (now the second right y-axis)
-        ax3 = ax1.twinx()
-        ax3.spines['right'].set_position(('outward', 60)) # Adjusted position for ax2
-        color_tpot = 'tab:purple'
-        tpot_values = df['Mean TPOT (ms)'].astype(float).tolist()
-        l4, = ax3.plot(x_values, tpot_values, marker='v', color=color_tpot, label='Mean TPOT (ms)')
-        ax3.set_ylabel('Mean TPOT (ms)', color=color_tpot)
-        ax3.tick_params(axis='y', labelcolor=color_tpot)
-        ax3.set_ylim(bottom=0)  # Start from 0
-
-        # Legends
-        lns = [l2, l3, l4]
-        labels = [l.get_label() for l in lns]
-        ax1.legend(lns, labels, loc='upper left')
-        
-        plt.title(f'LLM Loadtest Results ({model_id})')
-        plt.tight_layout(pad=4.0)  # Add more padding for the multiple axes
-        
-        # Save the plot - ensure PNG extension is correctly added
+        # Call the plot_llm_loadtest_chart function to generate the current run's plot
         plot_file_path = os.path.join(model_dataset_dir, f"{base_filename}.png")
-        plt.savefig(plot_file_path)
-        print(f"Plot saved to: {plot_file_path}")
+        plot_llm_loadtest_chart(
+            df_source=results_file_path,
+            output_plot_path=plot_file_path,
+            model_id_for_title=model_id,
+            x_axis_label_options=['Successful requests', 'Number of Prompts'],
+            x_axis_col_options=['Successful requests', 'num_prompts']
+        )
     except ImportError:
         print("matplotlib or pandas is not installed. Please install them to enable plotting.")
     except Exception as e:
         print(f"Plotting failed: {e}")
+        traceback.print_exc()
 
 
 def main():

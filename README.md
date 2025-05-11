@@ -41,6 +41,9 @@ Key features:
   - `{timestamp}_{prompts-list}.raw.txt`: Complete console output
   - `{timestamp}_{prompts-list}.results.txt`: Tab-separated metrics
   - `{timestamp}_{prompts-list}.png`: Visualization chart
+  - `all.results.txt`: Appends results from all test runs with timestamp information
+  - `average.results.txt`: Aggregates data from all runs, averaging by "Successful requests"
+  - `all.png`: Visualization chart based on averaged data across all runs
 - Automatically creates visualization using matplotlib showing key metrics with "Successful requests" as X-axis
 - Visualization chart shows Request throughput, Output token throughput, Mean TTFT, and Mean TPOT metrics
 

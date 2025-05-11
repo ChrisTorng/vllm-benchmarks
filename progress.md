@@ -26,3 +26,11 @@
 18. Ask: 我發現似乎是因為 Request throughput (req/s) 與 Output token throughput (tok/s) 的值同步增長，又列為不同軸，結果所有點都重疊的樣子，因此會誤以為看不到。請為我解釋這個現象是否正常，或者是程式收集數值有誤?
    => 因輸出 sonnet-output-len 預設值為 150，上述兩值為固定 1:150 的關係。
 19. 請刪除圖中 Request throughput (req/s) 之軸與值。並把先前偵錯用的多餘輸出或檢查等程式均刪除。
+
+底下使用 Gemini 2.5 Pro:
+20. 請在保留目前所有的輸出檔 raw.txt/results.txt/png 之外，再增加輸出到同資料夾下的 all.results.txt/average.results.txt 與 all.png。all.results.txt 會以附加的方式，將原本的 results.txt 內容輸出進去，並額外加入第一欄為 timestamp 值 (實際執行該次測試的 timestamp，而非運用於檔名之多次測試之統一 timestamp)。而 average.results.txt 則為依 Succesful requests 排序，而相同 Succesful requests 的多個 rows 取平均值，並刪除 timestamp 欄位後儲存。all.png 則為依據 average.results.txt 的結果，再次繪製相同 png 的折線圖結果。
+21. 執行後沒有看到 all.* 相關檔案。
+
+底下使用 Claude 3.7 Sonnet:
+22. 請在保留目前所有的輸出檔 raw.txt/results.txt/png 之外，再增加輸出到同資料夾下的 all.results.txt/average.results.txt 與 all.png。all.results.txt 會以附加的方式，將原本的 results.txt 內容輸出進去，並額外加入第一欄為 timestamp 值 (實際執行該次測試的 timestamp，而非運用於檔名之多次測試之統一 timestamp)。而 average.results.txt 則為由 all.results.txt 內全部資料，依 Succesful requests 排序，而相同 Succesful requests 的多個 rows 取平均值，並刪除 timestamp 欄位後儲存。all.png 則為依據 average.results.txt 的結果，再次繪製相同 png 的折線圖結果。目前有新建的 `plot_llm_loadtest_chart()` 是否有用? 若可用請利用，否之則刪除。
+23. #terminalSelection 修正錯誤。
