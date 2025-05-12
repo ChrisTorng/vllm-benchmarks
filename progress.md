@@ -39,4 +39,5 @@
 26. all.2.sorted.txt 中必須保留 Keep 欄位，而且前面有指定 Keep=1 與 Keep=0 資料中間要多空一空行。這樣在計算 all.3.average.txt 時，才不會誤將 Keep=0 欄位也加入。另 all.3.average.txt 計算平均值時，請截到小數兩位。
 
 27. 我要將 llm-loadtest.py 目前的輸入參數均改使用 json 設定檔方式讀取，僅有 prompts-list 參數仍保持在命令列輸入。
-28. 命令列輸入參數除 prompts-list/config-file 外均刪除，均需由 json 設定檔讀取。而 prompts-list 僅由命令列參數讀取，不要加入 json 中。
+
+28. 我要可以由參數列指定輸出路徑，json 檔內也要增加輸出路徑，json 檔內的預設值為 json 檔所在路徑 "."，因此實際路徑解析由 json 檔所在路徑為基底。

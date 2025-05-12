@@ -1,3 +1,5 @@
 .venv/
 results/google_gemma-3-1b-it_sonnet/*
 !results/google_gemma-3-1b-it_sonnet/all.*
+3070/google_gemma-3-1b-it_sonnet/*
+!3070/google_gemma-3-1b-it_sonnet/all.*

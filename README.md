@@ -29,7 +29,7 @@ The `llm-loadtest.py` script is an optimization tool that runs benchmark tests w
 
 ```bash
 uv pip install matplotlib
-python3 llm-loadtest.py --backend vllm --model google/gemma-3-1b-it --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --prompts-list 1,2,3
+python3 llm-loadtest.py --prompts-list 1,2,3
 ```
 
 Key features:
@@ -57,52 +57,9 @@ Refer to [benchmarks/README.md](benchmarks/README.md) for other datasets and par
 Now, all parameters (except `prompts-list`) are loaded from a JSON config file. Only `prompts-list` is provided via command line. The config file path can be specified with `--config`, default is `llm-loadtest.json`.
 
 ```bash
-python3 llm-loadtest.py --prompts-list 1,2,3 [--config your-config.json]
+python3 llm-loadtest.py --prompts-list 1,2,3 [--config your-config.json] [--output-dir /path/to/output]
 ```
 
-#### Example `llm-loadtest.json`:
-```json
-{
-  "backend": "vllm",
-  "base_url": null,
-  "host": "127.0.0.1",
-  "port": 8000,
-  "endpoint": "/v1/completions",
-  "dataset_name": "sonnet",
-  "dataset_path": "benchmarks/sonnet.txt",
-  "max_concurrency": null,
-  "model": "google/gemma-3-1b-it",
-  "tokenizer": null,
-  "use_beam_search": false,
-  "logprobs": null,
-  "request_rate": "inf",
-  "burstiness": 1.0,
-  "seed": 0,
-  "trust_remote_code": false,
-  "disable_tqdm": false,
-  "profile": false,
-  "ignore_eos": false,
-  "percentile_metrics": "ttft,tpot,itl",
-  "metric_percentiles": "99",
-  "goodput": null,
-  "sonnet_input_len": 550,
-  "sonnet_output_len": 150,
-  "sonnet_prefix_len": 200,
-  "sharegpt_output_len": null,
-  "random_input_len": 1024,
-  "random_output_len": 128,
-  "random_range_ratio": 0.0,
-  "random_prefix_len": 0,
-  "top_p": null,
-  "top_k": null,
-  "min_p": null,
-  "temperature": null,
-  "tokenizer_mode": "auto",
-  "served_model_name": null,
-  "lora_modules": null
-}
-```
+#### Example [llm-loadtest.json](llm-loadtest.json):
+
 - Only `prompts-list` is required on the command line, all other settings are read from the config file.
-- You can copy and edit the above JSON as a template.
-
----

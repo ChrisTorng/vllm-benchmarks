@@ -338,8 +338,8 @@ async def main_async(args: argparse.Namespace):
     # Normalize model_id to replace invalid path characters
     normalized_model_id = model_id.replace('/', '_').replace('\\', '_')
     
-    # Create new directory structure: ./results/{model}_{dataset-name}/
-    results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+    # Create new directory structure: {output_dir}/{model}_{dataset-name}/
+    results_dir = args.output_dir
     model_dataset_dir = os.path.join(results_dir, f"{normalized_model_id}_{args.dataset_name}")
     os.makedirs(model_dataset_dir, exist_ok=True)
     
@@ -855,6 +855,12 @@ def main():
         default="llm-loadtest.json",
         help="Path to JSON config file (default: llm-loadtest.json)",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Output directory for all result files (overrides config output_dir)",
+    )
     args = parser.parse_args()
 
     # Load config from JSON file
@@ -869,8 +875,18 @@ def main():
     if isinstance(config.get('request_rate'), str) and config['request_rate'].lower() == 'inf':
         config['request_rate'] = float('inf')
 
+    # Determine base path for output_dir (relative to config file location)
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+    json_output_dir = config.get('output_dir', '.')
+    # If output_dir is relative, resolve it from config file location
+    resolved_output_dir = os.path.abspath(os.path.join(config_dir, json_output_dir))
+    # If --output-dir is specified, override
+    if args.output_dir is not None:
+        resolved_output_dir = os.path.abspath(args.output_dir)
+
     # Merge config into args, command line prompts-list has highest priority
     config['prompts_list'] = args.prompts_list
+    config['output_dir'] = resolved_output_dir
     # Convert config dict to argparse.Namespace for compatibility
     args = argparse.Namespace(**config)
 
