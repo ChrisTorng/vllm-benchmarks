@@ -16,6 +16,7 @@
 9. 我要完整的原始壓測資料，目前收集的資料不完整，包括 raw/results.txt 都需要更新。
 10. 前面的不對，我不要 JSON 格式，我要 raw.txt 與原始壓測的螢幕輸出格式一致， results.txt 收集資料項目也一致，其他多餘的都不要。
 11. #terminalSelection 請仔細檢查，benchmark_serving.py 的輸出與 llm-loadtest.py 的輸出不一樣。我要 benchmark_serving.py 一模一樣的輸出，儲存到 raw.txt 中，也要顯示出來。而 results.txt 裡面的欄位值，也要與 benchmark_serving.py 的輸出值項目一致。
+
 12. 請將最後的結果，繪製一張折線圖，橫軸是次數，縱軸左邊是 Request throughput (req/s)/Output token throughput (tok/s) (兩個軸)，右邊是 Mean TTFT (ms)/Mean TPOT (ms) (兩個軸)。
     => 建立新的 py 不符目的，放棄。
 13. 請在 llm-loadtest.py 將最後的結果，繪製一張折線圖，橫軸是次數，縱軸左邊是 Request throughput (req/s)/Output token throughput (tok/s) (兩個軸)，右邊是 Mean TTFT (ms)/Mean TPOT (ms) (兩個軸)。圖檔名依先前 txt 前綴，後加 .png。
@@ -39,5 +40,10 @@
 26. all.2.sorted.txt 中必須保留 Keep 欄位，而且前面有指定 Keep=1 與 Keep=0 資料中間要多空一空行。這樣在計算 all.3.average.txt 時，才不會誤將 Keep=0 欄位也加入。另 all.3.average.txt 計算平均值時，請截到小數兩位。
 
 27. 我要將 llm-loadtest.py 目前的輸入參數均改使用 json 設定檔方式讀取，僅有 prompts-list 參數仍保持在命令列輸入。
-
 28. 我要可以由參數列指定輸出路徑，json 檔內也要增加輸出路徑，json 檔內的預設值為 json 檔所在路徑 "."，因此實際路徑解析由 json 檔所在路徑為基底。
+
+29. 因為我會人工檢視 all.1.results.txt 內容，將有問題的測試項目設定 Keep=0 不採用，故請將 llm-loadtest.py 後段輸出 all.2.sorted.txt/all.3.average.txt/all.4.png 部份拆出來為獨立的 generate-all.py，但輸出 all.1.results.txt 仍保留在原 py 內，這樣就保留可以在修改 Keep 值後重新建立後續三個檔的機制。另請建立 shell 程式，會接連呼叫 llm-loadtest.py 與 generate-all.py，並可傳入任意參數都給 llm-loadtest.py，讓我仍然可以方便執行一個指令做完全部的事。generate-all.py 會接收一個路徑參數，指定 all.1.results.txt 輸入及後續輸出檔的路徑。
+30. run-llm-loadtest.sh 只要將所有參數轉傳給 llm-loadtest.py 即可，不要介入讀取或異動。另 output-dir 若有傳入，則用作 generate-all.py 的參數，若沒有 output-dir 但有 config，則以 config 路徑為 generate-all.py 參數；若也沒有，則以目前路徑為 generate-all.py 參數。
+31. 目前 llm-loadtest.py 裡會以 {model}_{dataset-name} 為輸出子目錄，現在我要完全以 output_dir/output-dir 參數為準，不要再建立輸出子目錄了。這樣它的輸出路徑才能後續由 generate-all.py 取得。
+32. 請將 README.md 全面更新到符合目前狀態。
+33. 輸出檔名請勿異動，仍然維持先前的名稱，不要加入 {model}_{dataset-name}。

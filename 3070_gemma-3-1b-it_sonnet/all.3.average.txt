@@ -1,5 +1,5 @@
 Successful requests	num_prompts	Benchmark duration (s)	Total input tokens	Total generated tokens	Request throughput (req/s)	Output token throughput (tok/s)	Total Token throughput (tok/s)	Mean TTFT (ms)	Median TTFT (ms)	P99 TTFT (ms)	Mean TPOT (ms)	Median TPOT (ms)	P99 TPOT (ms)	Mean ITL (ms)	Median ITL (ms)	P99 ITL (ms)
-1	1.00	1.71	511.00	150.00	0.59	87.74	386.62	21.70	21.70	21.70	11.35	11.35	11.35	11.36	11.01	16.87
+1	1.00	1.72	511.00	150.00	0.58	87.55	385.80	21.14	21.14	21.14	11.38	11.38	11.38	11.39	11.04	16.49
 2	2.00	1.62	1011.50	300.00	1.25	186.74	816.61	44.12	44.12	60.70	10.51	10.51	10.58	10.61	10.35	16.54
 3	3.00	1.74	1514.00	450.00	1.73	259.13	1130.94	27.00	30.56	30.90	11.45	11.45	11.45	11.45	11.21	15.45
 5	5.00	1.64	2553.00	750.00	3.05	458.33	2018.49	50.40	57.36	58.12	10.62	10.60	10.66	10.62	10.49	15.32
