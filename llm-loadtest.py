@@ -28,6 +28,7 @@ import time
 import traceback
 from typing import List, Optional, Any, Dict
 import contextlib
+import json
 
 # Adjust Python's module search path to make relative imports in benchmarks directory work correctly
 import os.path
@@ -840,223 +841,39 @@ async def main_async(args: argparse.Namespace):
 
 def main():
     """Main function"""
-    parser = FlexibleArgumentParser(
-        description="Load testing tool supporting multiple num-prompts values")
-    
+    parser = argparse.ArgumentParser(
+        description="Load testing tool using JSON config and prompts-list override")
     parser.add_argument(
         "--prompts-list",
         type=str,
         default="1,2,3",
         help="List of num-prompts values to test, comma-separated",
     )
-    
-    # Add standard benchmark_serving.py arguments
     parser.add_argument(
-        "--backend",
+        "--config",
         type=str,
-        default="vllm",
-        help="Backend type",
+        default="llm-loadtest.json",
+        help="Path to JSON config file (default: llm-loadtest.json)",
     )
-    parser.add_argument(
-        "--base-url",
-        type=str,
-        default=None,
-        help="Server or API base URL if not using http host and port",
-    )
-    parser.add_argument("--host", type=str, default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument(
-        "--endpoint",
-        type=str,
-        default="/v1/completions",
-        help="API endpoint",
-    )
-    parser.add_argument(
-        "--dataset-name",
-        type=str,
-        default="sonnet",
-        choices=["sharegpt", "burstgpt", "sonnet", "random"],
-        help="Name of the dataset to benchmark on",
-    )
-    parser.add_argument("--dataset-path",
-                        type=str,
-                        required=True,
-                        help="Path to the sharegpt/sonnet dataset")
-    parser.add_argument(
-        "--max-concurrency",
-        type=int,
-        default=None,
-        help="Maximum number of concurrent requests")
-
-    parser.add_argument(
-        "--model",
-        type=str,
-        required=True,
-        help="Name of the model",
-    )
-    parser.add_argument(
-        "--tokenizer",
-        type=str,
-        help="Name or path of the tokenizer, if not using the default tokenizer",
-    )
-    parser.add_argument("--use-beam-search", action="store_true")
-    parser.add_argument(
-        "--logprobs",
-        type=int,
-        default=None,
-        help="Number of logprobs-per-token to compute & return",
-    )
-    parser.add_argument(
-        "--request-rate",
-        type=float,
-        default=float("inf"),
-        help="Number of requests per second",
-    )
-    parser.add_argument(
-        "--burstiness",
-        type=float,
-        default=1.0,
-        help="Burstiness factor of the request generation",
-    )
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--trust-remote-code",
-        action="store_true",
-        help="Trust remote code from huggingface",
-    )
-    parser.add_argument(
-        "--disable-tqdm",
-        action="store_true",
-        help="Specify to disable tqdm progress bar",
-    )
-    parser.add_argument(
-        "--profile",
-        action="store_true",
-        help="Use Torch Profiler",
-    )
-    parser.add_argument(
-        "--ignore-eos",
-        action="store_true",
-        help="Set ignore_eos flag when sending the benchmark request")
-    parser.add_argument(
-        "--percentile-metrics",
-        type=str,
-        default="ttft,tpot,itl",
-        help="List of selected metrics to report percentils",
-    )
-    parser.add_argument(
-        "--metric-percentiles",
-        type=str,
-        default="99",
-        help="List of percentiles for selected metrics",
-    )
-    parser.add_argument(
-        "--goodput",
-        nargs="+",
-        required=False,
-        help="Specify service level objectives as KEY:VALUE pairs")
-
-    # Dataset specific parameters
-    sonnet_group = parser.add_argument_group("sonnet dataset options")
-    sonnet_group.add_argument(
-        "--sonnet-input-len",
-        type=int,
-        default=550,
-        help="Number of input tokens per request, used only for sonnet dataset",
-    )
-    sonnet_group.add_argument(
-        "--sonnet-output-len",
-        type=int,
-        default=150,
-        help="Number of output tokens per request, used only for sonnet dataset",
-    )
-    sonnet_group.add_argument(
-        "--sonnet-prefix-len",
-        type=int,
-        default=200,
-        help="Number of prefix tokens per request, used only for sonnet dataset",
-    )
-
-    sharegpt_group = parser.add_argument_group("sharegpt dataset options")
-    sharegpt_group.add_argument(
-        "--sharegpt-output-len",
-        type=int,
-        default=None,
-        help="Output length for each request. Overrides the output length from the ShareGPT dataset",
-    )
-
-    random_group = parser.add_argument_group("random dataset options")
-    random_group.add_argument(
-        "--random-input-len",
-        type=int,
-        default=1024,
-        help="Number of input tokens per request, used only for random sampling",
-    )
-    random_group.add_argument(
-        "--random-output-len",
-        type=int,
-        default=128,
-        help="Number of output tokens per request, used only for random sampling",
-    )
-    random_group.add_argument(
-        "--random-range-ratio",
-        type=float,
-        default=0.0,
-        help="Range ratio for sampling input/output length, used only for random sampling",
-    )
-    random_group.add_argument(
-        "--random-prefix-len",
-        type=int,
-        default=0,
-        help="Number of fixed prefix tokens before the random context in a request",
-    )
-
-    sampling_group = parser.add_argument_group("sampling parameters")
-    sampling_group.add_argument(
-        "--top-p",
-        type=float,
-        default=None,
-        help="Top-p sampling parameter",
-    )
-    sampling_group.add_argument(
-        "--top-k",
-        type=int,
-        default=None,
-        help="Top-k sampling parameter",
-    )
-    sampling_group.add_argument(
-        "--min-p",
-        type=float,
-        default=None,
-        help="Min-p sampling parameter",
-    )
-    sampling_group.add_argument(
-        "--temperature",
-        type=float,
-        default=None,
-        help="Temperature sampling parameter",
-    )
-
-    parser.add_argument(
-        '--tokenizer-mode',
-        type=str,
-        default="auto",
-        choices=['auto', 'slow', 'mistral', 'custom'],
-        help='The tokenizer mode',
-    )
-
-    parser.add_argument("--served-model-name",
-                        type=str,
-                        default=None,
-                        help="The model name used in the API")
-
-    parser.add_argument("--lora-modules",
-                        nargs='+',
-                        default=None,
-                        help="A subset of LoRA module names passed in when launching the server")
-
     args = parser.parse_args()
-    
+
+    # Load config from JSON file
+    config_path = args.config or "llm-loadtest.json"
+    if not os.path.exists(config_path):
+        print(f"Config file not found: {config_path}")
+        sys.exit(1)
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
+    # Convert string 'inf' to float('inf') for request_rate if needed
+    if isinstance(config.get('request_rate'), str) and config['request_rate'].lower() == 'inf':
+        config['request_rate'] = float('inf')
+
+    # Merge config into args, command line prompts-list has highest priority
+    config['prompts_list'] = args.prompts_list
+    # Convert config dict to argparse.Namespace for compatibility
+    args = argparse.Namespace(**config)
+
     # Run the async main function
     asyncio.run(main_async(args))
 

@@ -37,3 +37,6 @@
 24. 目前最後的結果產出 all.1.results.txt/all.3.average.txt/all.4.png，以上檔名我是手動修改，請幫我確認是否全部程式都有改正。我已經手動加第一欄 Keep 在 all.1.results.txt 中，請修改程式，亦在 all.1.results.txt 所有附加結果中，預設加入第一欄 Keep 值為 1。然後再加一個 all.2.sorted.txt 輸出檔，它會讀 all.1.results.txt 內所有值，於所有 rows 中，將 Keep=1 放前面，隔一空行後放 Keep=0 在後面，這兩組內依 Successful requests 排序，若值一樣就依 timestamp 排序。然後生成 all.3.average.txt 時，僅取得 all.2.sortedtxt 裡的 Keep=1 項目而已，略過 Keep=0 項目。
 25. 執行後發現一些問題。目前 all.2.sorted.txt 的筆數較少，經查少了今天的所有資料，是否不小心在 Keep=0 之後的資料都未讀入? 而 all.2.sorted.txt 中 Keep=0 的所有資料，應該與前面 Keep=1 的資料中間隔一個空行。另排序的要求是「這兩組 (Keep=1/0) 內依 Successful requests 排序，若值一樣就依 timestamp 排序」，目前看未滿足 timestamp 排序。再來 all.3.average.txt 中未將 Keep=0 資料均排除，連帶 all.4.png 也包括了 Keep=0 資料。
 26. all.2.sorted.txt 中必須保留 Keep 欄位，而且前面有指定 Keep=1 與 Keep=0 資料中間要多空一空行。這樣在計算 all.3.average.txt 時，才不會誤將 Keep=0 欄位也加入。另 all.3.average.txt 計算平均值時，請截到小數兩位。
+
+27. 我要將 llm-loadtest.py 目前的輸入參數均改使用 json 設定檔方式讀取，僅有 prompts-list 參數仍保持在命令列輸入。
+28. 命令列輸入參數除 prompts-list/config-file 外均刪除，均需由 json 設定檔讀取。而 prompts-list 僅由命令列參數讀取，不要加入 json 中。
