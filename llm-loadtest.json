@@ -1,4 +1,6 @@
 {
+  //"benchmark_script": "my-benchmark.py",
+  //"benchmark_script": "vllm-benchmark.py",
   "output_dir": "results",
   "backend": "vllm",
   "base_url": null,
