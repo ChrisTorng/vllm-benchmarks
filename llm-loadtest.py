@@ -3,13 +3,14 @@
 """
 LLM Load Testing Tool
 
-This script coordinates load testing by calling vllm-benchmark.py with
+This script coordinates load testing by calling a benchmark script with
 different num-prompts values, managing configuration, and collecting results.
 
 Usage:
     python llm-loadtest.py 
         [--config llm-loadtest.json]  # Path to JSON config file (default: llm-loadtest.json)
         [--output-dir ./results]  # Output directory for all result files (overrides config output_dir)
+        [--benchmark-script vllm-benchmark.py]  # Benchmark script to use (vllm-benchmark.py or my-benchmark.py)
         --prompts-list 1,2,3   # Specify num-prompts values to test, comma-separated
 """
 
@@ -160,25 +161,26 @@ def plot_llm_loadtest_chart(df_source: Any,  # pd.DataFrame or str
         plt.close('all')
 
 
-def run_vllm_benchmark(num_prompts: int, config: Dict[str, Any], options: List[str] = None) -> str:
+def run_benchmark(num_prompts: int, config: Dict[str, Any], benchmark_script: str, options: List[str] = None) -> str:
     """
-    Run vllm-benchmark.py as a subprocess with the given num_prompts value and config options.
+    Run a benchmark script as a subprocess with the given num_prompts value and config options.
     
     Args:
         num_prompts: Number of prompts to test
         config: Dictionary containing configuration parameters
-        options: Additional command-line options to pass to vllm-benchmark.py
+        benchmark_script: Benchmark script to run (e.g., "vllm-benchmark.py" or "my-benchmark.py")
+        options: Additional command-line options to pass to the benchmark script
         
     Returns:
-        The captured output from vllm-benchmark.py
+        The captured output from the benchmark script
     """
     # Build the command with all necessary parameters
-    cmd = ["python3", "vllm-benchmark.py", "--num-prompts", str(num_prompts)]
+    cmd = ["python3", benchmark_script, "--num-prompts", str(num_prompts)]
     
     # Add all config parameters as command-line arguments
     for key, value in config.items():
         # Skip prompts_list as it's specific to llm-loadtest.py
-        if key == "prompts_list" or key == "output_dir":
+        if key == "prompts_list" or key == "output_dir" or key == "benchmark_script":
             continue
             
         # Handle special cases
@@ -206,7 +208,7 @@ def run_vllm_benchmark(num_prompts: int, config: Dict[str, Any], options: List[s
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout
     except subprocess.CalledProcessError as e:
-        print(f"Error running vllm-benchmark.py: {e}")
+        print(f"Error running {benchmark_script}: {e}")
         print(f"stdout: {e.stdout}")
         print(f"stderr: {e.stderr}")
         raise
@@ -234,6 +236,12 @@ def main():
         default=None,
         help="Output directory for all result files (overrides config output_dir)",
     )
+    parser.add_argument(
+        "--benchmark-script",
+        type=str,
+        default="vllm-benchmark.py",
+        help="Benchmark script to use (default: vllm-benchmark.py)",
+    )
     args = parser.parse_args()
 
     # Load config from JSON file
@@ -260,6 +268,11 @@ def main():
     # Merge config and command line arguments
     config['prompts_list'] = args.prompts_list
     config['output_dir'] = resolved_output_dir
+    
+    # Get benchmark script from command line or config
+    benchmark_script = args.benchmark_script
+    if config.get('benchmark_script'):
+        benchmark_script = config.get('benchmark_script')
 
     # Get the list of num_prompts values to test
     prompts_list = [int(x) for x in config['prompts_list'].split(",")]
@@ -292,7 +305,7 @@ def main():
         
         start_time = time.time()
         try:
-            captured_output = run_vllm_benchmark(num_prompts, config)
+            captured_output = run_benchmark(num_prompts, config, benchmark_script)
             
             # Print the captured output
             print(captured_output, end="")

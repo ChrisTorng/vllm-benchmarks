@@ -43,17 +43,23 @@ Key features:
   2. From `--config` file directory if provided
   3. Default to current script directory if neither specified
 
-## Run [llm-loadtest.py](llm-loadtest.py) and [vllm-benchmark.py](vllm-benchmark.py)
+## Run [llm-loadtest.py](llm-loadtest.py) with [vllm-benchmark.py](vllm-benchmark.py) or [my-benchmark.py](my-benchmark.py)
 
-The `llm-loadtest.py` script coordinates load testing by calling `vllm-benchmark.py` with different `num-prompts` values, managing configuration, and collecting results. The `vllm-benchmark.py` script executes the actual benchmark test using functionality from `benchmark_serving.py`.
+The `llm-loadtest.py` script coordinates load testing by calling either `vllm-benchmark.py` (default) or `my-benchmark.py` with different `num-prompts` values, managing configuration, and collecting results.
 
-This redesigned architecture allows for:
-1. Cleaner separation of responsibilities between configuration management and benchmark execution
-2. Consistent output format matching the original `benchmark_serving.py` results
-3. Easier maintenance and future enhancements
+- `vllm-benchmark.py` - Uses vLLM's internal benchmark functionality
+- `my-benchmark.py` - A Python-based benchmark script using standard HTTP requests for API calls
 
+Choosing between benchmark scripts:
 ```bash
+# Use default vllm-benchmark.py
 python3 llm-loadtest.py --prompts-list 1,2,3
+
+# Use custom my-benchmark.py
+python3 llm-loadtest.py --prompts-list 1,2,3 --benchmark-script my-benchmark.py
+
+# Or define in config file
+# "benchmark_script": "my-benchmark.py"
 ```
 
 Key features:
@@ -127,3 +133,25 @@ The script includes robust error handling for missing columns and invalid data f
    - `all.4.png`: Visualization chart of the averaged data
 
 This workflow allows iterative improvement while maintaining data quality through manual verification.
+
+## Custom Benchmark Script [my-benchmark.py](my-benchmark.py)
+
+The `my-benchmark.py` script uses Python's built-in HTTP request functionality to benchmark LLM API endpoints, with similar output and functionality to `vllm-benchmark.py`. This allows benchmarking of API endpoints without requiring the vLLM library.
+
+Features:
+- Supports both Chat Completions (/v1/chat/completions) and Completions (/v1/completions) API endpoints
+- Uses Python's `requests` library for streaming API calls
+- Outputs detailed token timing information for each response token
+- Calculates TTFT, TPOT, and ITL metrics matching vLLM benchmark format
+- Fully compatible with llm-loadtest.py
+
+Example usage:
+```bash
+./run-llm-loadtest.sh --prompts-list 1,5,10 --benchmark-script my-benchmark.py --output-dir ./results_http
+```
+
+The output format for tokens is:
+```
+MM:SS.MMM   MM:SS.MMM   TOKEN_TEXT
+```
+Where the first timestamp is global time since start, the second is relative time since request, and the third is the token content.

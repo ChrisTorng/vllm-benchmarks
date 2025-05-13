@@ -62,3 +62,58 @@
 num-prompts=1 completed, time elapsed: 3.51 seconds
 num-prompts=1 completed, time elapsed: 11.14 seconds
 時間還差很多? 我要最內層的呼叫時間，不要加上多餘的初始化等額外作業時間。
+
+44. 請建立 my-benchmark.py，它以
+curl http://localhost:8000/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -d '{
+            "model": "google/gemma-3-1b-it",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Who won the world series in 2020?"}
+            ],
+            "stream": true
+}'
+格式，反覆呼叫。因為是壓測，對效能敏感，以上 curl 只是示範的要求格式，但還是以 python 內建 http request 呼叫功能發出，避免額外浪費執行時間。
+它會輸出與 vllm-benchmark.py, benchmarks/benchmark_serving.py 一模一樣的格式與步驟:
+```
+Initializing tokenizer...
+Initializing dataset...
+
+Running test with num-prompts = 1
+Starting initial single prompt test run...
+Initial test run completed. Starting main benchmark run...
+Traffic request rate: inf
+Burstiness factor: 1.0 (Poisson process)
+Maximum request concurrency: None
+============ Serving Benchmark Result ============
+Successful requests:                     1         
+Benchmark duration (s):                  1.88      
+Total input tokens:                      511       
+Total generated tokens:                  150       
+Request throughput (req/s):              0.53      
+Output token throughput (tok/s):         79.76     
+Total Token throughput (tok/s):          351.47    
+---------------Time to First Token----------------
+Mean TTFT (ms):                          20.47     
+Median TTFT (ms):                        20.47     
+P99 TTFT (ms):                           20.47     
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          12.48     
+Median TPOT (ms):                        12.48     
+P99 TPOT (ms):                           12.48     
+---------------Inter-token Latency----------------
+Mean ITL (ms):                           12.48     
+Median ITL (ms):                         11.59     
+P99 ITL (ms):                            25.05     
+==================================================
+num-prompts=1 completed, time elapsed: 3.91 seconds
+```
+來輸出結果，這樣才能共用截取輸出取得數值的功能。
+再修改 llm-loadtest.py，可以由命令列參數指定要執行 vllm-benchmark.py 或 my-benchmark.py，my-benchmark.py 的必要命令列參數要與 vllm-benchmark.py 相容，以便支援多種壓測程式。
+目前 my-benchmark.py 先做循序呼叫 LLM，也就是 num-prompts 的數量代表的是循序呼叫幾次。循序呼叫當中，因為是 stream 模式，要為每一個收到的回應文字，以下列格式輸出:
+01:23.123\t00:12.345\t這
+前面的時間是以正式壓測開始為 0 值基準，後面的時間是以該要求發出的時間為 0 值基準。另發出要求也要以上述格式輸出，要求的問題一樣列在兩組時間之後。
+    => pip install 錯誤，我用 uv pip install 手動完成。
+45. 我已用 uv pip 安裝 requests numpy，若還沒完成，請繼續修改。
+    => 
