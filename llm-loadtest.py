@@ -336,11 +336,15 @@ async def main_async(args: argparse.Namespace):
     results_dir = args.output_dir
     os.makedirs(results_dir, exist_ok=True)
     
+    # Create detail directory for raw.txt, results.txt, and png files
+    detail_dir = os.path.join(results_dir, "detail")
+    os.makedirs(detail_dir, exist_ok=True)
+    
     # Create filename format: {timestamp}_{prompts-list}.*
     normalized_model_id = model_id.replace('/', '_').replace('\\', '_')
     base_filename = f"{timestamp}_{prompts_str}"
-    raw_file_path = os.path.join(results_dir, f"{base_filename}.raw.txt")
-    results_file_path = os.path.join(results_dir, f"{base_filename}.results.txt")
+    raw_file_path = os.path.join(detail_dir, f"{base_filename}.raw.txt")
+    results_file_path = os.path.join(detail_dir, f"{base_filename}.results.txt")
     
     # --- Capture all print to raw_output ---
     raw_outputs = []
@@ -433,7 +437,7 @@ async def main_async(args: argparse.Namespace):
     # --- Plot result chart ---
     try:
         # Call the plot_llm_loadtest_chart function to generate the current run's plot
-        plot_file_path = os.path.join(results_dir, f"{base_filename}.png")
+        plot_file_path = os.path.join(detail_dir, f"{base_filename}.png")
         plot_llm_loadtest_chart(
             df_source=results_file_path,
             output_plot_path=plot_file_path,

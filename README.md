@@ -56,10 +56,11 @@ Key features:
 - Supports all standard benchmark_serving.py parameters
 - Produces a summary report comparing results from all test runs
 - Uses `--prompts-list` parameter to define which prompt counts to test (comma-separated)
-- Generates result files directly in the specified output directory:
-  - `{timestamp}_{prompts-list}.raw.txt`: Complete console output
-  - `{timestamp}_{prompts-list}.results.txt`: Tab-separated metrics
-  - `{timestamp}_{prompts-list}.png`: Individual run visualization chart
+- Generates result files in the specified output directory:
+  - `detail/` subdirectory:
+    - `{timestamp}_{prompts-list}.raw.txt`: Complete console output
+    - `{timestamp}_{prompts-list}.results.txt`: Tab-separated metrics
+    - `{timestamp}_{prompts-list}.png`: Individual run visualization chart
   - `all.1.results.txt`: Appends results from all test runs with Keep flag and timestamp information
 
 ## Usage Update: JSON Config
@@ -73,7 +74,7 @@ python3 llm-loadtest.py --prompts-list 1,2,3 [--config your-config.json] [--outp
 ```
 
 The `--output-dir` parameter specifies the directory where all output files will be stored. This directory will contain:
-- Individual run files with timestamps (raw.txt, results.txt, png)
+- `detail/` subdirectory with individual run files (raw.txt, results.txt, png)
 - The aggregated files (all.1.results.txt, all.2.sorted.txt, all.3.average.txt, all.4.png)
 
 #### Example [llm-loadtest.json](llm-loadtest.json):
@@ -105,8 +106,8 @@ The script includes robust error handling for missing columns and invalid data f
    ./run-llm-loadtest.sh --prompts-list 1,5,10 --output-dir ./results
    ```
    This executes the tests and creates:
-   - Raw result files
-   - `all.1.results.txt` with all test results (Keep=1 by default)
+   - Raw result files in `results/detail/` directory
+   - `results/all.1.results.txt` with all test results (Keep=1 by default)
 
 2. **Manual Review**:
    - Edit `results/all.1.results.txt` and set `Keep=0` for any problematic test runs

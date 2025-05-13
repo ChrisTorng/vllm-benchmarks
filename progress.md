@@ -47,3 +47,4 @@
 31. 目前 llm-loadtest.py 裡會以 {model}_{dataset-name} 為輸出子目錄，現在我要完全以 output_dir/output-dir 參數為準，不要再建立輸出子目錄了。這樣它的輸出路徑才能後續由 generate-all.py 取得。
 32. 請將 README.md 全面更新到符合目前狀態。
 33. 輸出檔名請勿異動，仍然維持先前的名稱，不要加入 {model}_{dataset-name}。
+34. {timestamp}_{prompts-list}.raw.txt/results.txt/png 三個檔改輸出到 details 子資料夾，而 all.1.results.txt 維持不變。
