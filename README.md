@@ -43,6 +43,35 @@ Key features:
   2. From `--config` file directory if provided
   3. Default to current script directory if neither specified
 
+
+## my-benchmark.py streaming output and new options
+
+`my-benchmark.py` now supports real-time streaming output for tokens and prompt display. You can control the display of the prompt and tokens using the following command-line arguments (or set them in `llm-loadtest.json`):
+
+- `--show-problem` (default: False): Show the prompt (problem) before sending the request
+- `--show-first-token` (default: False): Show the first token received from the stream
+- `--show-last-token` (default: False): Show the last token received from the stream
+- `--show-other-tokens` (default: False): Show all other tokens (not first/last) received from the stream
+
+All options are available as boolean fields in `llm-loadtest.json` as well:
+
+```jsonc
+{
+  "show_problem": false,
+  "show_first_token": false,
+  "show_last_token": false,
+  "show_other_tokens": false
+}
+```
+
+Example usage:
+
+```bash
+python3 my-benchmark.py --model google/gemma-3-1b-it --num-prompts 1 --show-problem --show-first-token
+```
+
+---
+
 ## Run [llm-loadtest.py](llm-loadtest.py) with [vllm-benchmark.py](vllm-benchmark.py) or [my-benchmark.py](my-benchmark.py)
 
 The `llm-loadtest.py` script coordinates load testing by calling either `vllm-benchmark.py` (default) or `my-benchmark.py` with different `num-prompts` values, managing configuration, and collecting results.
@@ -79,6 +108,16 @@ Key features:
 ### New Usage
 
 Now, all parameters (except `prompts-list`) are loaded from a JSON config file. Only `prompts-list` is provided via command line. The config file path can be specified with `--config`, default is `llm-loadtest.json`.
+
+### New: Support for Comments in llm-loadtest.json
+
+You can now add comments in your `llm-loadtest.json` config file. The following comment styles are supported and will be ignored when 讀取:
+
+- `//` single-line comments
+- `#` single-line comments
+- `/* ... */` multi-line comments
+
+This makes it easier to document your config 檔案. No extra 相依套件 is required; this is 內建 in `llm-loadtest.py`.
 
 ```bash
 python3 llm-loadtest.py --prompts-list 1,2,3 [--config your-config.json] [--output-dir /path/to/output]
@@ -147,7 +186,7 @@ Features:
 
 Example usage:
 ```bash
-./run-llm-loadtest.sh --prompts-list 1,5,10 --benchmark-script my-benchmark.py --output-dir ./results_http
+./run-llm-loadtest.sh --benchmark-script my-benchmark.py --config llm-loadtest.json --prompts-list 1,2,3
 ```
 
 The output format for tokens is:

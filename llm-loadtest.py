@@ -244,13 +244,25 @@ def main():
     )
     args = parser.parse_args()
 
-    # Load config from JSON file
+
+    # Load config from JSON file, supporting comments (//, #, /* ... */)
+    def strip_json_comments(json_str: str) -> str:
+        import re
+        # Remove // and # comments
+        json_str = re.sub(r'(^|\s)//.*$', '', json_str, flags=re.MULTILINE)
+        json_str = re.sub(r'(^|\s)#.*$', '', json_str, flags=re.MULTILINE)
+        # Remove /* ... */ comments
+        json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+        return json_str
+
     config_path = args.config or "llm-loadtest.json"
     if not os.path.exists(config_path):
         print(f"Config file not found: {config_path}")
         sys.exit(1)
     with open(config_path, 'r') as f:
-        config = json.load(f)
+        raw_json = f.read()
+        clean_json = strip_json_comments(raw_json)
+        config = json.loads(clean_json)
 
     # Convert string 'inf' to float('inf') for request_rate if needed
     if isinstance(config.get('request_rate'), str) and config['request_rate'].lower() == 'inf':

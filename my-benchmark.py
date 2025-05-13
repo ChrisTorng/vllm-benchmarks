@@ -47,7 +47,11 @@ async def send_chat_request(model: str,
                        host: str,
                        port: int,
                        endpoint: str,
-                       benchmark_start_time: float) -> Tuple[str, List[float], int]:
+                       benchmark_start_time: float,
+                       show_problem: bool = False,
+                       show_first_token: bool = False,
+                       show_last_token: bool = False,
+                       show_other_tokens: bool = False) -> Tuple[str, List[float], int]:
     """
     Send a request using Python's built-in HTTP request functionality.
     Supports both completions and chat completions endpoints.
@@ -91,74 +95,59 @@ async def send_chat_request(model: str,
     request_time = time.time()
     global_time = format_time(request_time - benchmark_start_time)
     relative_time = "00:00.000"
-    print(f"{global_time}\t{relative_time}\t{prompt}")
+    if show_problem:
+        print(f"{global_time}\t{relative_time}\t{prompt}", flush=True)
     
     # Initialize response variables
     full_response = ""
     token_times = []
     first_token_time = None
+    token_contents = []
     
     # Send the request with streaming response
     try:
         response = requests.post(url, json=data, stream=True, headers={"Content-Type": "application/json"})
-        
         if response.status_code != 200:
-            print(f"Error: Received status code {response.status_code}")
+            print(f"Error: Received status code {response.status_code}", flush=True)
             return "", [], 0
-        
-        # Process the streaming response
         for line in response.iter_lines(decode_unicode=True):
             if not line or line == "data: [DONE]":
                 continue
-                
-            # Get current time for this token
             current_time = time.time()
             token_time = current_time - request_time
-            
-            # Skip the stream prefix "data: "
             if line.startswith("data: "):
                 line = line[6:]
-                
             try:
-                # Parse the JSON chunk
                 chunk = json.loads(line)
-                
-                # Extract token content based on API type
                 token_content = ""
                 if "choices" in chunk and len(chunk["choices"]) > 0:
                     choice = chunk["choices"][0]
-                    
-                    # Chat completions format
                     if "delta" in choice and "content" in choice["delta"]:
                         token_content = choice["delta"]["content"]
-                    # Completions format
                     elif "text" in choice:
                         token_content = choice["text"]
-                        
                     if token_content:
-                        # Record time to first token if this is the first one
                         if first_token_time is None and token_content.strip():
-                            first_token_time = token_time
-                            
-                        # Add the token to the full response
+                            first_token_time = token_time * 1000
                         full_response += token_content
-                        
-                        # Record token timing (ms)
-                        token_times.append(token_time * 1000)  # Convert to ms
-                        
-                        # Output formatted time
+                        token_contents.append(token_content)
+                        token_times.append(token_time * 1000)
                         global_time = format_time(current_time - benchmark_start_time)
-                        relative_time = format_time(token_time)
-                        print(f"{global_time}\t{relative_time}\t{token_content}")
+                        idx = len(token_times) - 1
+                        show = False
+                        if idx == 0 and show_first_token:
+                            show = True
+                        elif idx == len(token_times) - 1 and show_last_token:
+                            show = True
+                        elif idx > 0 and idx < len(token_times) - 1 and show_other_tokens:
+                            show = True
+                        if show:
+                            print(f"{global_time}\t{token_time:09.3f}\t{token_content}", flush=True)
             except json.JSONDecodeError:
-                # Skip invalid JSON chunks
                 continue
-    
     except Exception as e:
-        print(f"Error during request: {e}")
+        print(f"Error during request: {e}", flush=True)
         return "", [], 0
-        
-    # Return the full response and token timings
     return full_response, token_times, len(token_times)
 
 def calculate_metrics(all_ttfts: List[float], all_token_times: List[List[float]]) -> Dict[str, float]:
@@ -262,8 +251,6 @@ async def run_benchmark(num_prompts: int, args: argparse.Namespace) -> Dict[str,
     for i in range(num_prompts):
         prompt = generate_prompt(i)
         system_prompt = "You are a helpful assistant."
-        
-        # Send the request and get response
         response, token_times, token_count = await send_chat_request(
             model=args.model,
             prompt=prompt,
@@ -271,11 +258,13 @@ async def run_benchmark(num_prompts: int, args: argparse.Namespace) -> Dict[str,
             host=args.host,
             port=args.port,
             endpoint=args.endpoint,
-            benchmark_start_time=benchmark_start_time
+            benchmark_start_time=benchmark_start_time,
+            show_problem=getattr(args, "show_problem", False),
+            show_first_token=getattr(args, "show_first_token", False),
+            show_last_token=getattr(args, "show_last_token", False),
+            show_other_tokens=getattr(args, "show_other_tokens", False)
         )
-        
         if token_times:
-            # The first token time is the TTFT
             ttft = token_times[0]
             all_ttfts.append(ttft)
             all_token_times_lists.append(token_times)
@@ -406,9 +395,13 @@ def main():
     parser.add_argument("--request-rate", type=str, default="inf")
     parser.add_argument("--burstiness", type=float, default=1.0)
     
+    # Add new output control arguments
+    parser.add_argument("--show-problem", action="store_true", default=False, help="Show the problem (prompt)")
+    parser.add_argument("--show-first-token", action="store_true", default=False, help="Show the first token")
+    parser.add_argument("--show-last-token", action="store_true", default=False, help="Show the last token")
+    parser.add_argument("--show-other-tokens", action="store_true", default=False, help="Show other tokens (not first/last)")
     # Parse arguments
     args, unknown = parser.parse_known_args()
-    
     # Initialize asyncio
     asyncio.run(main_async(args))
 

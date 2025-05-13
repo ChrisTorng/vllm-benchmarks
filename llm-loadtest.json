@@ -1,4 +1,8 @@
 {
+  "show_problem": false,
+  "show_first_token": false,
+  "show_last_token": false,
+  "show_other_tokens": false,
   //"benchmark_script": "my-benchmark.py",
   //"benchmark_script": "vllm-benchmark.py",
   "output_dir": "results",

@@ -116,4 +116,14 @@ num-prompts=1 completed, time elapsed: 3.91 seconds
 前面的時間是以正式壓測開始為 0 值基準，後面的時間是以該要求發出的時間為 0 值基準。另發出要求也要以上述格式輸出，要求的問題一樣列在兩組時間之後。
     => pip install 錯誤，我用 uv pip install 手動完成。
 45. 我已用 uv pip 安裝 requests numpy，若還沒完成，請繼續修改。
-    => 
+
+GPT-4.1:
+46. #terminalSelection 請支援有註解的 llm-loadtest.json 檔案讀取。
+47. my-benchmark.py 執行當中的輸出，沒辦法第一時間看到，要全部執行完才看得到，請將輸出改為即時顯示。
+另針對目前顯示接收到 stream 輸出的資訊，以及顯示問題的資訊，請增加參數:
+- show-problem 顯示問題
+- show-first-token，顯示第一個 token
+- show-last-token，顯示最後一個 token
+- show-other-tokens 顯示中間其他的 token
+它們的預設值均為 False。
+在 my-benchmark.py 的命令列參數，以及 llm-loadtest.json 中增加上述參數。
