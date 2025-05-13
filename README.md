@@ -2,6 +2,8 @@
 
 The [benchmarks](benchmarks) folder is a clone from [vllm/benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks).
 
+Linux (Ubuntu) and WSL are supported and tested. Windows is not supported because of vllm.
+
 ## Run [vLLM](https://github.com/vllm-project/vllm/) with LLM [google/gemma-3-1b-it](https://huggingface.co/google/gemma-3-1b-it)
 
 - [vLLM - Installation](https://docs.vllm.ai/en/latest/getting_started/installation.html) 
@@ -20,7 +22,7 @@ This is the original [vllm/benchmarks](https://github.com/vllm-project/vllm/tree
 uv venv
 source .venv/bin/activate
 uv pip install vllm pandas datasets
-python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b-it --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --num-prompts 1
+python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b-it --host localhost --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --num-prompts 1
 ```
 
 ## Run [run-llm-loadtest.sh](run-llm-loadtest.sh)

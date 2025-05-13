@@ -1,3 +1,5 @@
 .venv/
 3070_gemma-3-1b-it_sonnet/*
 !3070_gemma-3-1b-it_sonnet/all.*
+4090_gemma-3-1b-it_sonnet/*
+!4090_gemma-3-1b-it_sonnet/all.*
