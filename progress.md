@@ -52,4 +52,13 @@
 35. Ask: 請問 SonnetDataset 是做什麼用? 請詳細解釋。
 36. Ask: 請告訴我它建立的完整提示內容是什麼。
 37. generate-all.py 中有許多偵錯用的輸出，請將不必要的輸出均刪除。
-37. 接下來我要建立第二套壓測程式，其輸出會與目前的 llm-loadtest.py 一致。
+
+38. 接下來我要建立第二套壓測程式，為了要與 benchmarks/benchmark_serving.py 的結果做比對，其輸出會與目前的 llm-loadtest.py 一致，會有完整的 ============ Serving Benchmark Result ============ 區段。為了重構做預備，請將目前的 llm-loadtest.py 拆出呼叫 benchmarks/benchmark_serving.py 相關的程式，另建立 vllm-benchmark.py。vllm-benchmark.py 的 stdio 輸出，再由 llm-loadtest.py 截取而取得結果。而 llm-loadtest.json 的讀取仍由 llm-loadtest.py 負責。
+39. #terminalSelection
+40. #terminalSelection 請再仔細檢查。
+41. o4-mini: #terminalSelection
+42. o4-mini: #terminalSelection 還是不行，請仔細全面檢查，並反覆執行指定的指令，直到錯誤消除，然後再將與解決問題無關的多餘程式清除，未完成任務，不要問我任何問題。
+43. claude 3.7 Sonnet: #terminalSelection 為何會有兩個輸出:
+num-prompts=1 completed, time elapsed: 3.51 seconds
+num-prompts=1 completed, time elapsed: 11.14 seconds
+時間還差很多? 我要最內層的呼叫時間，不要加上多餘的初始化等額外作業時間。

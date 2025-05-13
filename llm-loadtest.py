@@ -3,8 +3,8 @@
 """
 LLM Load Testing Tool
 
-This script uses functionality from benchmark_serving.py to perform load testing with
-different num-prompts values while only initializing once, thus saving execution time.
+This script coordinates load testing by calling vllm-benchmark.py with
+different num-prompts values, managing configuration, and collecting results.
 
 Usage:
     python llm-loadtest.py 
@@ -14,43 +14,24 @@ Usage:
 """
 
 import argparse
-import asyncio
 import datetime
 import gc
-import io
 import os
-import random
 import sys
 import time
 import traceback
-from typing import List, Optional, Any, Dict
-import contextlib
+import subprocess
 import json
+from typing import List, Optional, Any, Dict
 
-# Adjust Python's module search path to make relative imports in benchmarks directory work correctly
-import os.path
-benchmarks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "benchmarks")
-sys.path.insert(0, benchmarks_dir)
+try:
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import numpy as np
+except ImportError:
+    print("Warning: matplotlib or pandas is not installed. Plotting will be disabled.")
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Import required functions and classes from benchmark_serving.py
-from benchmarks.benchmark_serving import (
-    benchmark,
-    get_tokenizer,
-    OPENAI_COMPATIBLE_BACKENDS,
-    SonnetDataset,
-    ShareGPTDataset,
-    BurstGPTDataset,
-    RandomDataset,
-    SampleRequest,
-    check_goodput_args,
-    FlexibleArgumentParser,
-)
-
-# Define the plot_llm_loadtest_chart function here, outside main_async
+# Define the plot_llm_loadtest_chart function here
 # This function encapsulates the plotting logic.
 def plot_llm_loadtest_chart(df_source: Any,  # pd.DataFrame or str
                             output_plot_path: str,
@@ -175,281 +156,60 @@ def plot_llm_loadtest_chart(df_source: Any,  # pd.DataFrame or str
         plt.close('all') # Ensure any figures are closed if imports fail mid-process
     except Exception as e:
         print(f"Plotting failed for {output_plot_path}: {e}")
-        import traceback
         traceback.print_exc()
         plt.close('all')
 
 
-async def run_benchmark(backend: str,
-                        api_url: str,
-                        base_url: str,
-                        model_id: str,
-                        model_name: str,
-                        tokenizer: Any,
-                        dataset: Any,
-                        num_prompts: int,
-                        args: argparse.Namespace):
-    """Run a single benchmark test with the specified num_prompts value"""
+def run_vllm_benchmark(num_prompts: int, config: Dict[str, Any], options: List[str] = None) -> str:
+    """
+    Run vllm-benchmark.py as a subprocess with the given num_prompts value and config options.
     
-    print(f"\nRunning test with num-prompts = {num_prompts}")
-    
-    # Based on the dataset type, get input requests using the appropriate method
-    if args.dataset_name == "sonnet":
-        # For sonnet dataset, format differently based on backend type
-        if args.backend == "openai-chat":
-            input_requests = dataset.sample(num_requests=num_prompts,
-                                        input_len=args.sonnet_input_len,
-                                        output_len=args.sonnet_output_len,
-                                        prefix_len=args.sonnet_prefix_len,
-                                        tokenizer=tokenizer,
-                                        return_prompt_formatted=False)
-        else:
-            assert tokenizer.chat_template or tokenizer.default_chat_template, (
-                "Tokenizer/model must have chat template for sonnet dataset.")
-            input_requests = dataset.sample(num_requests=num_prompts,
-                                        input_len=args.sonnet_input_len,
-                                        output_len=args.sonnet_output_len,
-                                        prefix_len=args.sonnet_prefix_len,
-                                        tokenizer=tokenizer,
-                                        return_prompt_formatted=True)
-    elif args.dataset_name == "sharegpt":
-        input_requests = ShareGPTDataset(random_seed=args.seed,
-                                    dataset_path=args.dataset_path).sample(
-                                        tokenizer=tokenizer,
-                                        num_requests=num_prompts,
-                                        output_len=args.sharegpt_output_len,
-                                    )
-    elif args.dataset_name == "burstgpt":
-        input_requests = BurstGPTDataset(random_seed=args.seed,
-                                    dataset_path=args.dataset_path).sample(
-                                        tokenizer=tokenizer, 
-                                        num_requests=num_prompts
-                                    )
-    elif args.dataset_name == "random":
-        input_requests = RandomDataset(dataset_path=args.dataset_path).sample(
-            tokenizer=tokenizer,
-            num_requests=num_prompts,
-            prefix_len=args.random_prefix_len,
-            input_len=args.random_input_len,
-            output_len=args.random_output_len,
-            range_ratio=args.random_range_ratio,
-        )
-    else:
-        raise ValueError(f"Unsupported dataset: {args.dataset_name}")
+    Args:
+        num_prompts: Number of prompts to test
+        config: Dictionary containing configuration parameters
+        options: Additional command-line options to pass to vllm-benchmark.py
         
-    # Check goodput parameters
-    goodput_config_dict = check_goodput_args(args)
+    Returns:
+        The captured output from vllm-benchmark.py
+    """
+    # Build the command with all necessary parameters
+    cmd = ["python3", "vllm-benchmark.py", "--num-prompts", str(num_prompts)]
     
-    # Collect sampling parameters
-    sampling_params = {
-        k: v
-        for k, v in {
-            "top_p": args.top_p,
-            "top_k": args.top_k,
-            "min_p": args.min_p,
-            "temperature": args.temperature
-        }.items() if v is not None
-    }
-
-    # Sampling parameters are only supported by openai-compatible backends
-    if sampling_params and args.backend not in OPENAI_COMPATIBLE_BACKENDS:
-        raise ValueError(
-            "Sampling parameters are only supported by openai-compatible backends.")
-
-    if "temperature" not in sampling_params:
-        sampling_params["temperature"] = 0.0  # Default to greedy decoding
-
-    # Run the benchmark test
-    captured = io.StringIO()
-    with contextlib.redirect_stdout(captured):
-        benchmark_result = await benchmark(
-            backend=backend,
-            api_url=api_url,
-            base_url=base_url,
-            model_id=model_id,
-            model_name=model_name,
-            tokenizer=tokenizer,
-            input_requests=input_requests,
-            logprobs=args.logprobs,
-            request_rate=args.request_rate,
-            burstiness=args.burstiness,
-            disable_tqdm=args.disable_tqdm,
-            profile=args.profile,
-            selected_percentile_metrics=args.percentile_metrics.split(","),
-            selected_percentiles=[
-                float(p) for p in args.metric_percentiles.split(",")
-            ],
-            ignore_eos=args.ignore_eos,
-            goodput_config_dict=goodput_config_dict,
-            max_concurrency=args.max_concurrency,
-            lora_modules=args.lora_modules,
-            extra_body=sampling_params,
-        )
-    
-    return benchmark_result, captured.getvalue()
-
-
-async def main_async(args: argparse.Namespace):
-    """Run all benchmark tests asynchronously"""
-    
-    # Set random seeds
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-
-    backend = args.backend
-    model_id = args.model
-    model_name = args.served_model_name or args.model
-    tokenizer_id = args.tokenizer or args.model
-    tokenizer_mode = args.tokenizer_mode
-
-    if args.base_url is not None:
-        api_url = f"{args.base_url}{args.endpoint}"
-        base_url = f"{args.base_url}"
-    else:
-        api_url = f"http://{args.host}:{args.port}{args.endpoint}"
-        base_url = f"http://{args.host}:{args.port}"
-
-    # Initialize tokenizer (only once)
-    print("Initializing tokenizer...")
-    tokenizer = get_tokenizer(tokenizer_id,
-                            tokenizer_mode=tokenizer_mode,
-                            trust_remote_code=args.trust_remote_code)
-
-    # Initialize dataset (only once)
-    print("Initializing dataset...")
-    if args.dataset_name == "sonnet":
-        dataset = SonnetDataset(dataset_path=args.dataset_path)
-    elif args.dataset_name in ["sharegpt", "burstgpt", "random"]:
-        # These datasets are created during each sampling, so no pre-initialization needed
-        dataset = None 
-    else:
-        raise ValueError(f"Unsupported dataset: {args.dataset_name}")
-
-    # Get the list of num_prompts values to test
-    prompts_list = [int(x) for x in args.prompts_list.split(",")]
-    
-    # Create timestamp for unique filenames
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    prompts_str = args.prompts_list.replace(',', '-')
-    
-    # Use output_dir directly as the results directory
-    results_dir = args.output_dir
-    os.makedirs(results_dir, exist_ok=True)
-    
-    # Create detail directory for raw.txt, results.txt, and png files
-    detail_dir = os.path.join(results_dir, "detail")
-    os.makedirs(detail_dir, exist_ok=True)
-    
-    # Create filename format: {timestamp}_{prompts-list}.*
-    normalized_model_id = model_id.replace('/', '_').replace('\\', '_')
-    base_filename = f"{timestamp}_{prompts_str}"
-    raw_file_path = os.path.join(detail_dir, f"{base_filename}.raw.txt")
-    results_file_path = os.path.join(detail_dir, f"{base_filename}.results.txt")
-    
-    # --- Capture all print to raw_output ---
-    raw_outputs = []
-    results = []
-    for num_prompts in prompts_list:
-        # Avoid GC processing "static" data - reduce pause times
-        gc.collect()
-        gc.freeze()
+    # Add all config parameters as command-line arguments
+    for key, value in config.items():
+        # Skip prompts_list as it's specific to llm-loadtest.py
+        if key == "prompts_list" or key == "output_dir":
+            continue
+            
+        # Handle special cases
+        if key == "percentile_metrics" and isinstance(value, list):
+            value = ",".join(value)
+        elif key == "metric_percentiles" and isinstance(value, list):
+            value = ",".join([str(p) for p in value])
+        elif value is True:
+            cmd.append(f"--{key.replace('_', '-')}")
+            continue
+        elif value is False or value is None:
+            continue
         
-        start_time = time.time()
-        result, captured_output = await run_benchmark(
-            backend=backend,
-            api_url=api_url,
-            base_url=base_url,
-            model_id=model_id,
-            model_name=model_name,
-            tokenizer=tokenizer,
-            dataset=dataset,
-            num_prompts=num_prompts,
-            args=args
-        )
-        end_time = time.time()
-        
-        elapsed_time = end_time - start_time
-        # Print and collect the captured output (benchmark_serving.py style)
-        print(captured_output, end="")
-        raw_outputs.append(captured_output)
-        print(f"num-prompts={num_prompts} completed, time elapsed: {elapsed_time:.2f} seconds")
-        raw_outputs.append(f"num-prompts={num_prompts} completed, time elapsed: {elapsed_time:.2f} seconds\n")
-        
-        results.append((num_prompts, result, captured_output))
+        # Add the parameter to the command - use space instead of equals sign
+        cmd.append(f"--{key.replace('_', '-')}")
+        cmd.append(f"{value}")
     
-    # --- Save raw.txt (all captured outputs) ---
-    with open(raw_file_path, 'w') as raw_file:
-        for out in raw_outputs:
-            raw_file.write(out)
+    # Add any additional options
+    if options:
+        cmd.extend(options)
     
-    # --- Save results.txt (only Serving Benchmark Result block values) ---
-    # Parse values from captured_output
-    def parse_serving_block(text):
-        # Only parse the block between '============ Serving Benchmark Result ============' and the next '====' or end
-        lines = text.splitlines()
-        in_block = False
-        values = {}
-        for line in lines:
-            if 'Serving Benchmark Result' in line:
-                in_block = True
-                continue
-            if '==================================================' in line and in_block:
-                break 
-            if in_block and ':' in line:
-                key, value = line.split(":", 1)
-                values[key.strip()] = value.strip()
-        return values
-    # Collect all keys in order of first appearance
-    all_keys = []
-    seen = set()
-    for _, _, captured in results:
-        vals = parse_serving_block(captured)
-        for k in vals:
-            if k not in seen:
-                all_keys.append(k)
-                seen.add(k)
-    # Write header
-    with open(results_file_path, 'w') as results_file:
-        results_file.write("\t".join(["num_prompts"] + all_keys) + "\n")
-        for num_prompts, _, captured in results:
-            vals = parse_serving_block(captured)
-            row = [str(num_prompts)] + [vals.get(k, "") for k in all_keys]
-            results_file.write("\t".join(row) + "\n")
-    
-    # --- Create all.1.results.txt (appends results with timestamp) ---
-    all_results_path = os.path.join(results_dir, "all.1.results.txt")
-    
-    # Check if all.1.results.txt exists, create with header if it doesn't
-    if not os.path.exists(all_results_path) or os.path.getsize(all_results_path) == 0:
-        with open(all_results_path, 'w') as all_results_file:
-            all_results_file.write("\t".join(["Keep", "timestamp", "num_prompts"] + all_keys) + "\n")
-    
-    # Append current results to all.1.results.txt with timestamp
-    with open(all_results_path, 'a') as all_results_file:
-        for num_prompts, _, captured in results:
-            vals = parse_serving_block(captured)
-            row = ["1", timestamp, str(num_prompts)] + [vals.get(k, "") for k in all_keys]
-            all_results_file.write("\t".join(row) + "\n")
-    
-    print(f"Results appended to: {all_results_path}")
-    print(f"To generate all.2.sorted.txt, all.3.average.txt, and all.4.png, run: python generate-all.py {results_dir}")
-    
-    # --- Plot result chart ---
+    # Run the command and capture output
+    print(f"Running command: {' '.join(cmd)}")
     try:
-        # Call the plot_llm_loadtest_chart function to generate the current run's plot
-        plot_file_path = os.path.join(detail_dir, f"{base_filename}.png")
-        plot_llm_loadtest_chart(
-            df_source=results_file_path,
-            output_plot_path=plot_file_path,
-            model_id_for_title=model_id,
-            x_axis_label_options=['Successful requests', 'Number of Prompts'],
-            x_axis_col_options=['Successful requests', 'num_prompts']
-        )
-    except ImportError:
-        print("matplotlib or pandas is not installed. Please install them to enable plotting.")
-    except Exception as e:
-        print(f"Plotting failed: {e}")
-        traceback.print_exc()
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"Error running vllm-benchmark.py: {e}")
+        print(f"stdout: {e.stdout}")
+        print(f"stderr: {e.stderr}")
+        raise
 
 
 def main():
@@ -497,14 +257,129 @@ def main():
     if args.output_dir is not None:
         resolved_output_dir = os.path.abspath(args.output_dir)
 
-    # Merge config into args, command line prompts-list has highest priority
+    # Merge config and command line arguments
     config['prompts_list'] = args.prompts_list
     config['output_dir'] = resolved_output_dir
-    # Convert config dict to argparse.Namespace for compatibility
-    args = argparse.Namespace(**config)
 
-    # Run the async main function
-    asyncio.run(main_async(args))
+    # Get the list of num_prompts values to test
+    prompts_list = [int(x) for x in config['prompts_list'].split(",")]
+    
+    # Create timestamp for unique filenames
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    prompts_str = config['prompts_list'].replace(',', '-')
+    
+    # Use output_dir directly as the results directory
+    results_dir = config['output_dir']
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # Create detail directory for raw.txt, results.txt, and png files
+    detail_dir = os.path.join(results_dir, "detail")
+    os.makedirs(detail_dir, exist_ok=True)
+    
+    # Create filename format: {timestamp}_{prompts-list}.*
+    model_id = config.get('model', 'unknown_model')
+    normalized_model_id = model_id.replace('/', '_').replace('\\', '_')
+    base_filename = f"{timestamp}_{prompts_str}"
+    raw_file_path = os.path.join(detail_dir, f"{base_filename}.raw.txt")
+    results_file_path = os.path.join(detail_dir, f"{base_filename}.results.txt")
+    
+    # --- Capture all output from vllm-benchmark.py ---
+    raw_outputs = []
+    results = []
+    
+    for num_prompts in prompts_list:
+        gc.collect()  # Clean up before each run
+        
+        start_time = time.time()
+        try:
+            captured_output = run_vllm_benchmark(num_prompts, config)
+            
+            # Print the captured output
+            print(captured_output, end="")
+            raw_outputs.append(captured_output)
+            
+            # Don't add our own timing information - rely on the benchmark's timing output
+            results.append((num_prompts, None, captured_output))
+        except Exception as e:
+            print(f"Error during benchmark with num_prompts={num_prompts}: {e}")
+            traceback.print_exc()
+            continue
+    
+    # --- Save raw.txt (all captured outputs) ---
+    with open(raw_file_path, 'w') as raw_file:
+        for out in raw_outputs:
+            raw_file.write(out)
+    
+    # --- Save results.txt (only Serving Benchmark Result block values) ---
+    # Parse values from captured_output
+    def parse_serving_block(text):
+        # Only parse the block between '============ Serving Benchmark Result ============' and the next '====' or end
+        lines = text.splitlines()
+        in_block = False
+        values = {}
+        for line in lines:
+            if 'Serving Benchmark Result' in line:
+                in_block = True
+                continue
+            if '==================================================' in line and in_block:
+                break 
+            if in_block and ':' in line:
+                key, value = line.split(":", 1)
+                values[key.strip()] = value.strip()
+        return values
+    
+    # Collect all keys in order of first appearance
+    all_keys = []
+    seen = set()
+    for _, _, captured in results:
+        vals = parse_serving_block(captured)
+        for k in vals:
+            if k not in seen:
+                all_keys.append(k)
+                seen.add(k)
+    
+    # Write header
+    with open(results_file_path, 'w') as results_file:
+        results_file.write("\t".join(["num_prompts"] + all_keys) + "\n")
+        for num_prompts, _, captured in results:
+            vals = parse_serving_block(captured)
+            row = [str(num_prompts)] + [vals.get(k, "") for k in all_keys]
+            results_file.write("\t".join(row) + "\n")
+    
+    # --- Create all.1.results.txt (appends results with timestamp) ---
+    all_results_path = os.path.join(results_dir, "all.1.results.txt")
+    
+    # Check if all.1.results.txt exists, create with header if it doesn't
+    if not os.path.exists(all_results_path) or os.path.getsize(all_results_path) == 0:
+        with open(all_results_path, 'w') as all_results_file:
+            all_results_file.write("\t".join(["Keep", "timestamp", "num_prompts"] + all_keys) + "\n")
+    
+    # Append current results to all.1.results.txt with timestamp
+    with open(all_results_path, 'a') as all_results_file:
+        for num_prompts, _, captured in results:
+            vals = parse_serving_block(captured)
+            row = ["1", timestamp, str(num_prompts)] + [vals.get(k, "") for k in all_keys]
+            all_results_file.write("\t".join(row) + "\n")
+    
+    print(f"Results appended to: {all_results_path}")
+    print(f"To generate all.2.sorted.txt, all.3.average.txt, and all.4.png, run: python generate-all.py {results_dir}")
+    
+    # --- Plot result chart ---
+    try:
+        # Call the plot_llm_loadtest_chart function to generate the current run's plot
+        plot_file_path = os.path.join(detail_dir, f"{base_filename}.png")
+        plot_llm_loadtest_chart(
+            df_source=results_file_path,
+            output_plot_path=plot_file_path,
+            model_id_for_title=model_id,
+            x_axis_label_options=['Successful requests', 'Number of Prompts'],
+            x_axis_col_options=['Successful requests', 'num_prompts']
+        )
+    except ImportError:
+        print("matplotlib or pandas is not installed. Please install them to enable plotting.")
+    except Exception as e:
+        print(f"Plotting failed: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

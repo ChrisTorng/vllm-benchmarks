@@ -43,9 +43,14 @@ Key features:
   2. From `--config` file directory if provided
   3. Default to current script directory if neither specified
 
-## Run [llm-loadtest.py](llm-loadtest.py)
+## Run [llm-loadtest.py](llm-loadtest.py) and [vllm-benchmark.py](vllm-benchmark.py)
 
-The `llm-loadtest.py` script is an optimization tool that runs benchmark tests with different `num-prompts` values while only initializing the environment once, saving execution time between test runs.
+The `llm-loadtest.py` script coordinates load testing by calling `vllm-benchmark.py` with different `num-prompts` values, managing configuration, and collecting results. The `vllm-benchmark.py` script executes the actual benchmark test using functionality from `benchmark_serving.py`.
+
+This redesigned architecture allows for:
+1. Cleaner separation of responsibilities between configuration management and benchmark execution
+2. Consistent output format matching the original `benchmark_serving.py` results
+3. Easier maintenance and future enhancements
 
 ```bash
 python3 llm-loadtest.py --prompts-list 1,2,3
