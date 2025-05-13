@@ -48,3 +48,8 @@
 32. 請將 README.md 全面更新到符合目前狀態。
 33. 輸出檔名請勿異動，仍然維持先前的名稱，不要加入 {model}_{dataset-name}。
 34. {timestamp}_{prompts-list}.raw.txt/results.txt/png 三個檔改輸出到 details 子資料夾，而 all.1.results.txt 維持不變。
+
+35. Ask: 請問 SonnetDataset 是做什麼用? 請詳細解釋。
+36. Ask: 請告訴我它建立的完整提示內容是什麼。
+37. generate-all.py 中有許多偵錯用的輸出，請將不必要的輸出均刪除。
+37. 接下來我要建立第二套壓測程式，其輸出會與目前的 llm-loadtest.py 一致。

@@ -180,11 +180,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
             all_df = pd.read_csv(all_results_path, sep='\t', engine='python', 
                                 on_bad_lines='warn', quoting=3, encoding='utf-8',
                                 dtype=str, skip_blank_lines=True)  # Use str dtype to avoid conversion errors
-            
-            # Debug output to verify data loading
-            print(f"Read {len(all_df)} rows from {all_results_path}")
-            print(f"Columns found: {all_df.columns.tolist()}")
-            
         except Exception as e1:
             print(f"Warning: Error parsing {all_results_path} with python engine: {e1}")
             print("Falling back to manual file parsing...")
@@ -217,13 +212,11 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
             if 'Keep' not in all_df.columns and len(headers) > 0:
                 print("Adding missing 'Keep' column after manual parsing")
                 all_df['Keep'] = 1  # Set default Keep value
-            
-        print(f"Successfully loaded {all_results_path} with {len(all_df)} rows")
         
         if not all_df.empty:
-            # Check if 'Keep' column exists, print debugging info
+            # Check if 'Keep' column exists
             if 'Keep' in all_df.columns:
-                print(f"Unique Keep values before processing: {all_df['Keep'].unique()}")
+                pass
             else:
                 print("Warning: 'Keep' column not found in the data. Adding default value 1.")
                 all_df['Keep'] = 1
@@ -262,8 +255,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                 keep_1_df = all_df[all_df['Keep'] == 1].copy()
                 keep_0_df = all_df[all_df['Keep'] == 0].copy()
                 
-                print(f"Split into Keep=1 ({len(keep_1_df)} rows) and Keep=0 ({len(keep_0_df)} rows)")
-                
                 # Check if we have data after filtering
                 if keep_1_df.empty and keep_0_df.empty:
                     print("Warning: No valid data found after filtering by Keep value")
@@ -286,7 +277,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                 
                 # Check for duplicate Keep column (could happen during data processing)
                 if 'Keep.1' in keep_1_df_sorted.columns:
-                    print("Found duplicate Keep column, removing it")
                     keep_1_df_sorted = keep_1_df_sorted.drop(columns=['Keep.1'])
                 if 'Keep.1' in keep_0_df_sorted.columns:
                     keep_0_df_sorted = keep_0_df_sorted.drop(columns=['Keep.1'])
@@ -322,8 +312,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                                     row_values.append(val)
                                 row_line = '\t'.join(row_values) + '\n'
                                 sorted_file.write(row_line)
-                        
-                        print(f"Wrote {len(keep_1_df_sorted)} Keep=1 rows to {sorted_results_path}")
                     
                     # Append a blank line and then Keep=0 group if it's not empty
                     if not keep_0_df_sorted.empty:
@@ -339,8 +327,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                                     row_values.append(val)
                                 row_line = '\t'.join(row_values) + '\n'
                                 sorted_file.write(row_line)
-                        
-                        print(f"Wrote {len(keep_0_df_sorted)} Keep=0 rows to {sorted_results_path}")
                     
                     print(f"Sorted results saved to: {sorted_results_path}")
                 except Exception as write_err:
@@ -360,10 +346,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
         sorted_results_path = os.path.join(model_dataset_dir, "all.2.sorted.txt")
         
         if os.path.exists(sorted_results_path) and os.path.getsize(sorted_results_path) > 0:
-            # Debug info to help diagnose issues
-            print(f"Reading {sorted_results_path} for averaging...")
-            
-            # Read the sorted file with more flexible parsing options
             try:
                 # Read the file but stop at the first empty line (which separates Keep=1 and Keep=0)
                 keep_1_data = []
@@ -382,7 +364,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                     
                     # Process header line
                     headers = all_lines[0].strip().split('\t')
-                    print(f"Found header with columns: {headers}")
                     
                     # Process all lines up to empty line (or all if no empty line)
                     end_index = empty_line_index if empty_line_index else len(all_lines)
@@ -397,7 +378,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                     
                 # Create DataFrame from only Keep=1 data
                 keep_1_df = pd.DataFrame(keep_1_data, columns=headers)
-                print(f"Manually read {len(keep_1_df)} Keep=1 rows from {sorted_results_path}")
                 
                 # Double check that we only have Keep=1 data - only if Keep column exists
                 if 'Keep' in keep_1_df.columns:
@@ -405,15 +385,11 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                     # Verify all rows are Keep=1
                     non_keep_1_rows = keep_1_df[keep_1_df['Keep'] != '1']
                     if not non_keep_1_rows.empty:
-                        print(f"Warning: Found {len(non_keep_1_rows)} rows with Keep != 1. Filtering them out.")
                         keep_1_df = keep_1_df[keep_1_df['Keep'] == '1']
                 else:
                     # If Keep column is missing, assume all are Keep=1 (for backward compatibility)
-                    print("'Keep' column not found in data. Assuming all rows are Keep=1.")
                     keep_1_df['Keep'] = '1'  # Add Keep column with default value 1
                         
-                print(f"Final Keep=1 data for averaging: {len(keep_1_df)} rows")
-                
             except Exception as parse_err:
                 print(f"Warning: Error during manual parsing of {sorted_results_path}: {parse_err}")
                 print("Trying pandas parsing approach as fallback...")
@@ -427,11 +403,9 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                     if 'Keep' in sorted_df.columns:
                         sorted_df['Keep'] = sorted_df['Keep'].astype(str).str.strip()
                         keep_1_df = sorted_df[sorted_df['Keep'] == '1'].copy()
-                        print(f"Filtered {len(keep_1_df)} Keep=1 rows from pandas read of {len(sorted_df)} total rows")
                     else:
                         # For backward compatibility assume all are Keep=1
                         keep_1_df = sorted_df
-                        print(f"No Keep column found, assuming all {len(keep_1_df)} rows are Keep=1")
                 except Exception as pd_err:
                     print(f"Error in pandas fallback parsing: {pd_err}")
                     print("Could not parse sorted file. Cannot create all.3.average.txt")
@@ -439,8 +413,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
             
             # Check if 'Successful requests' is in the columns and if we have Keep=1 data
             if 'Successful requests' in keep_1_df.columns and not keep_1_df.empty:
-                print(f"Found 'Successful requests' column. Processing {len(keep_1_df)} rows.")
-                
                 # Convert columns to appropriate types
                 try:
                     # Clean up 'Successful requests' column
@@ -455,7 +427,7 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                         try:
                             keep_1_df[col] = pd.to_numeric(keep_1_df[col], errors='coerce')
                         except Exception as col_err:
-                            print(f"Warning: Could not convert column {col} to numeric: {col_err}")
+                            pass
                     
                     # Group by Successful requests and compute the mean for numeric columns
                     numeric_cols = keep_1_df.select_dtypes(include=['number']).columns.tolist()
@@ -466,12 +438,9 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                     
                     # Check if Keep column exists for aggregation
                     if 'Keep' not in keep_1_df.columns:
-                        print("Adding 'Keep' column for aggregation")
                         keep_1_df['Keep'] = 1
                     
-                    print(f"Found {len(numeric_cols)} numeric columns and {len(non_numeric_cols)} non-numeric columns")
                 except Exception as type_err:
-                    print(f"Warning during type conversion: {type_err}")
                     # Fallback approach - manually identify numeric columns
                     numeric_cols = ['num_prompts', 'Successful requests', 'Benchmark duration (s)', 
                                    'Total input tokens', 'Total generated tokens', 'Request throughput (req/s)',
@@ -482,8 +451,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                     # Filter to only columns that exist
                     numeric_cols = [col for col in numeric_cols if col in keep_1_df.columns]
                     non_numeric_cols = [col for col in keep_1_df.columns if col not in numeric_cols and col not in ['timestamp', 'Keep']]
-                    
-                    print(f"Using fallback columns: {len(numeric_cols)} numeric, {len(non_numeric_cols)} non-numeric")
                 
                 # Group and calculate mean for numeric columns
                 try:
@@ -530,7 +497,6 @@ def create_all_outputs(model_dataset_dir: str, model_id: str = None):
                         # Save the averaged results
                         avg_results_path = os.path.join(model_dataset_dir, "all.3.average.txt")
                         avg_df.to_csv(avg_results_path, sep='\t', index=False, float_format='%.2f')
-                        print(f"Average results saved to: {avg_results_path} (with values rounded to 2 decimal places)")
                         
                         # --- Generate the all.4.png plot based on all.3.average.txt ---
                         all_plot_path = os.path.join(model_dataset_dir, "all.4.png")

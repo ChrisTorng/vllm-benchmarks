@@ -103,7 +103,7 @@ The script includes robust error handling for missing columns and invalid data f
 
 1. **Initial Load Test**:
    ```bash
-   ./run-llm-loadtest.sh --prompts-list 1,5,10 --output-dir ./results
+   ./run-llm-loadtest.sh --config llm-loadtest.json --prompts-list 1,2,3
    ```
    This executes the tests and creates:
    - Raw result files in `results/detail/` directory
