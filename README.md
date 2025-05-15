@@ -108,6 +108,53 @@ The `llm-loadtest.py` script has been updated to use this module approach intern
 
 ---
 
+## New: Parallel Request Processing
+
+`my-benchmark.py` now supports parallel request processing controlled by the `max_concurrency` parameter in the configuration file. This allows for more realistic load testing by simulating multiple concurrent users.
+
+### Configuration Options:
+
+- `max_concurrency`: Controls how many requests are processed in parallel
+  - When set to `null` (default), all requests are sent in parallel at once
+  - When set to a specific number (e.g., `5`), requests are processed in batches of that size
+  - When set to `1`, requests are processed sequentially (as in previous versions)
+
+### Output Format:
+
+The output format for tokens has been enhanced to include thread identification:
+```
+MM:SS.MMM MM:SS.MMM THREAD_ID    THREAD_SEQ    TOKEN_TEXT
+```
+Where:
+- First timestamp is global time since benchmark start
+- Second timestamp is relative time since request
+- `THREAD_ID` is the virtual thread ID (1-based) in the current batch
+- `THREAD_SEQ` is the sequence number (1-based) of the request in that thread
+- Last element is the token content
+
+### Example Configuration:
+
+```jsonc
+{
+  "benchmark_script": "my-benchmark.py",
+  "max_concurrency": 5,  // Process 5 requests at a time
+  // ... other configuration options
+}
+```
+
+### Example Usage:
+
+```bash
+./run-llm-loadtest.sh --benchmark-script my-benchmark.py --config llm-loadtest.json --prompts-list 10,20,50
+```
+
+When the benchmark starts, it will display:
+- Total number of prompts being tested
+- Actual concurrency being used
+- Maximum requests per batch
+
+This new parallel processing capability allows for more accurate testing of API endpoint performance under varying load conditions.
+
 ## Run [llm-loadtest.py](llm-loadtest.py) with [vllm-benchmark.py](vllm-benchmark.py) or [my-benchmark.py](my-benchmark.py)
 
 The `llm-loadtest.py` script coordinates load testing by importing either `vllm-benchmark.py` (default) or `my-benchmark.py` as modules and calling their benchmarking functions with different `num-prompts` values, managing configuration, and collecting results.

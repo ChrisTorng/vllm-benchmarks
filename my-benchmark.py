@@ -21,7 +21,7 @@ import asyncio
 import random
 from typing import List, Dict, Any, Optional, Tuple, Union
 import numpy as np
-import requests
+import aiohttp
 import socket
 
 def format_time(seconds: float) -> str:
@@ -44,6 +44,8 @@ async def send_chat_request(model: str,
                        port: int,
                        endpoint: str,
                        benchmark_start_time: float,
+                       thread_id: int = 0,
+                       thread_seq: int = 0,
                        show_problem: bool = False,
                        show_first_token: bool = False,
                        show_other_tokens: bool = False,
@@ -60,6 +62,8 @@ async def send_chat_request(model: str,
         port: API port
         endpoint: API endpoint
         benchmark_start_time: Time when the benchmark started
+        thread_id: ID of the virtual thread in parallel execution (1-based)
+        thread_seq: Sequence number of the request in this thread (1-based)
         show_problem: Whether to show the prompt before sending request
         show_first_token: Whether to show the first token received
         show_other_tokens: Whether to show all tokens except the first one
@@ -96,7 +100,7 @@ async def send_chat_request(model: str,
     global_time = format_time(request_time - benchmark_start_time)
     relative_time = "00:00.000"
     if show_problem:
-        print(f"{global_time}\t{relative_time}\t{prompt}", flush=True)
+        print(f"{global_time} {relative_time} {thread_id}\t{thread_seq}\t{prompt}", flush=True)
     
     # Initialize response variables
     full_response = ""
@@ -106,52 +110,56 @@ async def send_chat_request(model: str,
     
     # Send the request with streaming response
     try:
-        response = requests.post(url, json=data, stream=True, headers={"Content-Type": "application/json"})
-        if response.status_code != 200:
-            print(f"Error: Received status code {response.status_code}", flush=True)
-            return "", [], 0
-        for line in response.iter_lines(decode_unicode=True):
-            if not line or line == "data: [DONE]":
-                continue
-            current_time = time.time()
-            token_time = current_time - request_time
-            if line.startswith("data: "):
-                line = line[6:]
-            try:
-                chunk = json.loads(line)
-                token_content = ""
-                if "choices" in chunk and len(chunk["choices"]) > 0:
-                    choice = chunk["choices"][0]
-                    if "delta" in choice and "content" in choice["delta"]:
-                        token_content = choice["delta"]["content"]
-                    elif "text" in choice:
-                        token_content = choice["text"]
-                    if token_content:
-                        if first_token_time is None and token_content.strip():
-                            first_token_time = token_time * 1000
-                        full_response += token_content
-                        token_contents.append(token_content)
-                        token_times.append(token_time * 1000)
-                        current_time = time.time()  # Refresh current_time for display
-                        global_time = format_time(current_time - benchmark_start_time)
-                        idx = len(token_times) - 1
-                        show = False
-                        if idx == 0 and show_first_token:
-                            show = True
-                        elif idx > 0 and show_other_tokens:
-                            show = True
-                        if show:
-                            relative_time = format_time(token_time)
-                            print(f"{global_time}\t{relative_time}\t{token_content}", flush=True)
-            except json.JSONDecodeError:
-                continue
-        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data, headers={"Content-Type": "application/json"}) as response:
+                if response.status != 200:
+                    print(f"Error: Received status code {response.status}", flush=True)
+                    return "", [], 0
+                
+                # Process the streaming response
+                async for line in response.content:
+                    line = line.decode('utf-8').strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                    current_time = time.time()
+                    token_time = current_time - request_time
+                    if line.startswith("data: "):
+                        line = line[6:]
+                    try:
+                        chunk = json.loads(line)
+                        token_content = ""
+                        if "choices" in chunk and len(chunk["choices"]) > 0:
+                            choice = chunk["choices"][0]
+                            if "delta" in choice and "content" in choice["delta"]:
+                                token_content = choice["delta"]["content"]
+                            elif "text" in choice:
+                                token_content = choice["text"]
+                            if token_content:
+                                if first_token_time is None and token_content.strip():
+                                    first_token_time = token_time * 1000
+                                full_response += token_content
+                                token_contents.append(token_content)
+                                token_times.append(token_time * 1000)
+                                current_time = time.time()  # Refresh current_time for display
+                                global_time = format_time(current_time - benchmark_start_time)
+                                idx = len(token_times) - 1
+                                show = False
+                                if idx == 0 and show_first_token:
+                                    show = True
+                                elif idx > 0 and show_other_tokens:
+                                    show = True
+                                if show:
+                                    relative_time = format_time(token_time)
+                                    print(f"{global_time} {relative_time} {thread_id}\t{thread_seq}\t{token_content}", flush=True)
+                    except json.JSONDecodeError:
+                        continue
+            
         # After streaming is complete, show stream ended message if requested
         if show_stream_ended:
             last_time = time.time()
             global_time = format_time(last_time - benchmark_start_time)
             relative_time = format_time(last_time - request_time)
-            print(f"{global_time}\t{relative_time}\t[end]", flush=True)
+            print(f"{global_time} {relative_time} {thread_id}\t{thread_seq}\t[end]", flush=True)
             
     except Exception as e:
         print(f"Error during request: {e}", flush=True)
@@ -241,12 +249,21 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     Returns:
         Benchmark results dictionary
     """
+    # Get max_concurrency parameter, default to None
+    max_concurrency = kwargs.get("max_concurrency", None)
+    
+    # Calculate actual concurrency
+    actual_concurrency = num_prompts if max_concurrency is None else min(int(max_concurrency), num_prompts)
+    requests_per_batch = actual_concurrency
+    
     print(f"\nRunning test with num-prompts = {num_prompts}")
+    print(f"Concurrent requests = {actual_concurrency}")
+    print(f"Max requests per batch = {requests_per_batch}")
     print("Starting initial single prompt test run...")
     print("Initial test run completed. Starting main benchmark run...")
     print(f"Traffic request rate: inf")
     print(f"Burstiness factor: 1.0 (Poisson process)")
-    print(f"Maximum request concurrency: None")
+    print(f"Maximum request concurrency: {actual_concurrency}")
     
     all_responses = []
     all_ttfts = []
@@ -256,10 +273,13 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     # Start timing the entire benchmark
     benchmark_start_time = time.time()
     
-    # Process each prompt sequentially
-    for i in range(num_prompts):
-        prompt = generate_prompt(i)
-        system_prompt = "You are a helpful assistant."
+    # Create batches of prompts
+    prompts = [generate_prompt(i) for i in range(num_prompts)]
+    system_prompt = "You are a helpful assistant."
+    
+    # Prepare tasks to be processed in parallel batches
+    async def process_prompt(prompt_index, thread_id, thread_seq):
+        prompt = prompts[prompt_index]
         response, token_times, token_count = await send_chat_request(
             model=kwargs.get("model", "google/gemma-3-1b-it"),
             prompt=prompt,
@@ -268,17 +288,60 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
             port=kwargs.get("port", 8000),
             endpoint=kwargs.get("endpoint", "/v1/chat/completions"),
             benchmark_start_time=benchmark_start_time,
+            thread_id=thread_id,
+            thread_seq=thread_seq,
             show_problem=kwargs.get("show_problem", False),
             show_first_token=kwargs.get("show_first_token", False),
             show_other_tokens=kwargs.get("show_other_tokens", False),
             show_stream_ended=kwargs.get("show_stream_ended", False)
         )
-        if token_times:
-            ttft = token_times[0]
-            all_ttfts.append(ttft)
-            all_token_times_lists.append(token_times)
-            all_responses.append(response)
-            total_tokens_generated += token_count
+        return (response, token_times, token_count)
+    
+    # Process prompts in batches based on max_concurrency
+    if max_concurrency is None:
+        # Process all prompts concurrently if max_concurrency is None
+        tasks = []
+        for i in range(num_prompts):
+            # Thread ID is 1-based, thread_seq is 1-based
+            thread_id = i + 1
+            thread_seq = 1
+            tasks.append(process_prompt(i, thread_id, thread_seq))
+        
+        results = await asyncio.gather(*tasks)
+        
+        for result in results:
+            response, token_times, token_count = result
+            if token_times:
+                ttft = token_times[0]
+                all_ttfts.append(ttft)
+                all_token_times_lists.append(token_times)
+                all_responses.append(response)
+                total_tokens_generated += token_count
+    else:
+        # Process prompts in batches
+        for start_idx in range(0, num_prompts, actual_concurrency):
+            end_idx = min(start_idx + actual_concurrency, num_prompts)
+            batch_size = end_idx - start_idx
+            
+            tasks = []
+            for i in range(batch_size):
+                prompt_idx = start_idx + i
+                # Thread ID is 1-based (within batch)
+                thread_id = i + 1
+                # Thread sequence is 1-based (batch number)
+                thread_seq = (start_idx // actual_concurrency) + 1
+                tasks.append(process_prompt(prompt_idx, thread_id, thread_seq))
+            
+            batch_results = await asyncio.gather(*tasks)
+            
+            for result in batch_results:
+                response, token_times, token_count = result
+                if token_times:
+                    ttft = token_times[0]
+                    all_ttfts.append(ttft)
+                    all_token_times_lists.append(token_times)
+                    all_responses.append(response)
+                    total_tokens_generated += token_count
     
     # Calculate benchmark duration
     benchmark_duration = time.time() - benchmark_start_time
@@ -300,7 +363,7 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     
     # Format the benchmark results to match vllm-benchmark.py output
     results = {
-        "Successful requests": num_prompts,
+        "Successful requests": len(all_responses),
         "Benchmark duration (s)": benchmark_duration,
         "Total input tokens": total_input_tokens,
         "Total generated tokens": total_tokens_generated,
@@ -363,6 +426,9 @@ async def run_benchmark_async(num_prompts: int, **kwargs) -> Dict[str, Any]:
     # Print initialization messages to match vllm-benchmark.py output
     print("Initializing tokenizer...")
     print("Initializing dataset...")
+    
+    # Get max_concurrency from kwargs
+    max_concurrency = kwargs.get("max_concurrency", None)
     
     # Run the benchmark
     start_time = time.time()

@@ -151,3 +151,12 @@ Claude 3.7 Sonnet:
 57. 我放棄 show_last_token 的要求，讓 show_other_tokens 顯示除第一個以外的全部 token。但增加一個 show_stream_ended 參數，在 stream 結束後，顯示 [end]。
 58. 繼續
 59. 沒用的 show_last_token 需要刪除。
+
+增加 max_concurrency 支援:
+60. 請為 my-benchmark.py 增加平行發送要求的能力。當 json 設定檔中的 max_concurrency 值，設定 null 時，代表全部要求一次平行發出。若有設值則一次平行發送 max_concurrency 數量的要求，直到最後 num_prompts 全部要求數都發完為止。
+在正式開始前，顯示全部要求數 num_prompts，確定的平行發送數 (若max_concurrency 為 null 則顯示為全部要求數)，以及每組平行發送當中的最多要求數量。
+另顯示 token 等資訊時，格式請為:
+{mm:ss.fff} {mm:ss.fff} {current_thread_id}\t{current_thread_seq}\t{problem/token}
+以上 current_thread_id 代表平行發送中目前的虛擬 thread id，由 1 起算。current_thread_seq 代表該 thread 處理的第幾個要求，由 1 起算。
+61. 實測中，完全沒發現有平行發送的情況，請檢查程式碼。
+62. 我已用 uv pip install aiohttp 安裝完畢，請繼續。
