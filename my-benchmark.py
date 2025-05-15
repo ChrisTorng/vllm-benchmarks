@@ -46,8 +46,8 @@ async def send_chat_request(model: str,
                        benchmark_start_time: float,
                        show_problem: bool = False,
                        show_first_token: bool = False,
-                       show_last_token: bool = False,
-                       show_other_tokens: bool = False) -> Tuple[str, List[float], int]:
+                       show_other_tokens: bool = False,
+                       show_stream_ended: bool = False) -> Tuple[str, List[float], int]:
     """
     Send a request using Python's built-in HTTP request functionality.
     Supports both completions and chat completions endpoints.
@@ -60,6 +60,10 @@ async def send_chat_request(model: str,
         port: API port
         endpoint: API endpoint
         benchmark_start_time: Time when the benchmark started
+        show_problem: Whether to show the prompt before sending request
+        show_first_token: Whether to show the first token received
+        show_other_tokens: Whether to show all tokens except the first one
+        show_stream_ended: Whether to show [end] message after stream completes
         
     Returns:
         Tuple containing (full_response, token_times, token_count)
@@ -134,15 +138,21 @@ async def send_chat_request(model: str,
                         show = False
                         if idx == 0 and show_first_token:
                             show = True
-                        elif idx == len(token_times) - 1 and show_last_token:
-                            show = True
-                        elif idx > 0 and idx < len(token_times) - 1 and show_other_tokens:
+                        elif idx > 0 and show_other_tokens:
                             show = True
                         if show:
                             relative_time = format_time(token_time)
                             print(f"{global_time}\t{relative_time}\t{token_content}", flush=True)
             except json.JSONDecodeError:
                 continue
+        
+        # After streaming is complete, show stream ended message if requested
+        if show_stream_ended:
+            last_time = time.time()
+            global_time = format_time(last_time - benchmark_start_time)
+            relative_time = format_time(last_time - request_time)
+            print(f"{global_time}\t{relative_time}\t[end]", flush=True)
+            
     except Exception as e:
         print(f"Error during request: {e}", flush=True)
         return "", [], 0
@@ -260,8 +270,8 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
             benchmark_start_time=benchmark_start_time,
             show_problem=kwargs.get("show_problem", False),
             show_first_token=kwargs.get("show_first_token", False),
-            show_last_token=kwargs.get("show_last_token", False),
-            show_other_tokens=kwargs.get("show_other_tokens", False)
+            show_other_tokens=kwargs.get("show_other_tokens", False),
+            show_stream_ended=kwargs.get("show_stream_ended", False)
         )
         if token_times:
             ttft = token_times[0]

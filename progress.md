@@ -138,6 +138,16 @@ GPT-4.1:
 52. #terminalSelection 請再全面檢查參數傳遞問題。
 53. o4-mini: #terminalSelection 還是不行，請仔細檢查。
 
+Claude 3.7 Sonnet:
 54. my-benchmark.py 的輸出仍然沒有即時出現，是否因為攔截 stdio 的方式造成的?
 55. #terminalSelection 怎麼看到輸出兩次? 是否在 llm-loadtest.py 裡再次輸出了? 因為裡面已經有輸出了不用再重覆輸出。
-56. 
+56.   "show_last_token": true,
+  "show_other_tokens": false,
+發現若只開 show_last_token 還是全部都顯示
+  "show_last_token": false,
+  "show_other_tokens": true,
+發現若只開 show_other_token 就不顯示了。
+我要 show_last_token 只顯示最後一個 token，而 show_other_tokens 是顯示中間其他的 token。
+57. 我放棄 show_last_token 的要求，讓 show_other_tokens 顯示除第一個以外的全部 token。但增加一個 show_stream_ended 參數，在 stream 結束後，顯示 [end]。
+58. 繼續
+59. 沒用的 show_last_token 需要刪除。

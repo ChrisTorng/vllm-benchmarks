@@ -49,8 +49,8 @@ Key features:
 
 - `--show-problem` (default: False): Show the prompt (problem) before sending the request
 - `--show-first-token` (default: False): Show the first token received from the stream
-- `--show-last-token` (default: False): Show the last token received from the stream
-- `--show-other-tokens` (default: False): Show all other tokens (not first/last) received from the stream
+- `--show-other-tokens` (default: False): Show all tokens except the first token received from the stream
+- `--show-stream-ended` (default: False): Show an [end] message after the stream completes
 
 All options are available as boolean fields in `llm-loadtest.json` as well:
 
@@ -58,8 +58,8 @@ All options are available as boolean fields in `llm-loadtest.json` as well:
 {
   "show_problem": false,
   "show_first_token": false,
-  "show_last_token": false,
-  "show_other_tokens": false
+  "show_other_tokens": false,
+  "show_stream_ended": false
 }
 ```
 
