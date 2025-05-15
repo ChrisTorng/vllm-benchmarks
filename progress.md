@@ -137,4 +137,7 @@ GPT-4.1:
 51. #terminalSelection 在這次修改之前，同一個 json 設定檔先前是正常的，model 都有傳，tokenizer 都是 null。請再仔細檢查，包括引用的 benchmark_serving.py 看正確參數應該怎麼傳遞是合法的。
 52. #terminalSelection 請再全面檢查參數傳遞問題。
 53. o4-mini: #terminalSelection 還是不行，請仔細檢查。
-54. 
+
+54. my-benchmark.py 的輸出仍然沒有即時出現，是否因為攔截 stdio 的方式造成的?
+55. #terminalSelection 怎麼看到輸出兩次? 是否在 llm-loadtest.py 裡再次輸出了? 因為裡面已經有輸出了不用再重覆輸出。
+56. 

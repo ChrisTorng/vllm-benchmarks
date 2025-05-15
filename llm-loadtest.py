@@ -231,14 +231,30 @@ def run_benchmark(num_prompts: int, config: Dict[str, Any], benchmark_function: 
     # Run the benchmark function and capture output
     print(f"Running benchmark with num_prompts={num_prompts}")
     
-    # Capture stdout to get the benchmark output
+    # Create a custom stream that captures output and also prints to sys.stdout
+    class TeeStream:
+        def __init__(self, original_stream, capture_stream):
+            self.original_stream = original_stream
+            self.capture_stream = capture_stream
+            
+        def write(self, data):
+            self.original_stream.write(data)
+            self.original_stream.flush()  # Ensure real-time output display
+            self.capture_stream.write(data)
+            
+        def flush(self):
+            self.original_stream.flush()
+            self.capture_stream.flush()
+    
+    # Capture stdout while also displaying it in real-time
     f = io.StringIO()
-    with contextlib.redirect_stdout(f):
+    tee = TeeStream(sys.stdout, f)
+    with contextlib.redirect_stdout(tee):
         try:
             benchmark_function(num_prompts=num_prompts, **config_copy)
         except Exception as e:
             print(f"Error running benchmark: {e}")
-            traceback.print_exc(file=f)
+            traceback.print_exc()
             return f.getvalue()
     
     return f.getvalue()
@@ -351,8 +367,7 @@ def main():
         try:
             captured_output = run_benchmark(num_prompts, config, benchmark_function)
             
-            # Print the captured output
-            print(captured_output, end="")
+            # Don't print the captured output since TeeStream already showed it in real-time
             raw_outputs.append(captured_output)
             
             # Don't add our own timing information - rely on the benchmark's timing output
