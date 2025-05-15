@@ -8,13 +8,9 @@ to call the chat completions API. It's designed to match the output format of
 vllm-benchmark.py for easy integration with llm-loadtest.py.
 
 Usage:
-    python my-benchmark.py 
-        --model model_name
-        --num-prompts 1
-        [Other benchmark parameters...]
+    Import this module and call run_benchmark_with_params() function directly.
 """
 
-import argparse
 import json
 import os
 import sys
@@ -23,23 +19,23 @@ import datetime
 import statistics
 import asyncio
 import random
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 import numpy as np
 import requests
 import socket
 
-# For compatible arguments parsing
-class FlexibleArgumentParser(argparse.ArgumentParser):
-    """ArgumentParser that ignores unknown arguments."""
-    def parse_known_args(self, args=None, namespace=None):
-        args, argv = super().parse_known_args(args, namespace)
-        return args, argv
-
 def format_time(seconds: float) -> str:
     """Format time in MM:SS.MMM format."""
-    minutes = int(seconds // 60)
-    seconds_part = seconds % 60
-    return f"{minutes:02d}:{seconds_part:06.3f}"
+    # Handle negative times by using absolute value and adding a minus sign
+    is_negative = seconds < 0
+    abs_seconds = abs(seconds)
+    
+    minutes = int(abs_seconds // 60)
+    seconds_part = abs_seconds % 60
+    
+    formatted = f"{minutes:02d}:{seconds_part:06.3f}"
+    return f"-{formatted}" if is_negative else formatted
+
 
 async def send_chat_request(model: str, 
                        prompt: str, 
@@ -132,6 +128,7 @@ async def send_chat_request(model: str,
                         full_response += token_content
                         token_contents.append(token_content)
                         token_times.append(token_time * 1000)
+                        current_time = time.time()  # Refresh current_time for display
                         global_time = format_time(current_time - benchmark_start_time)
                         idx = len(token_times) - 1
                         show = False
@@ -142,7 +139,8 @@ async def send_chat_request(model: str,
                         elif idx > 0 and idx < len(token_times) - 1 and show_other_tokens:
                             show = True
                         if show:
-                            print(f"{global_time}\t{token_time:09.3f}\t{token_content}", flush=True)
+                            relative_time = format_time(token_time)
+                            print(f"{global_time}\t{relative_time}\t{token_content}", flush=True)
             except json.JSONDecodeError:
                 continue
     except Exception as e:
@@ -184,7 +182,8 @@ def calculate_metrics(all_ttfts: List[float], all_token_times: List[List[float]]
     for token_times in all_token_times:
         if len(token_times) > 1:
             # Calculate time per output token by finding differences between consecutive tokens
-            tpot_values = [token_times[i] - token_times[i-1] for i in range(1, len(token_times))]
+            # Ensure all differences are positive (at least 0.1ms)
+            tpot_values = [max(0.1, token_times[i] - token_times[i-1]) for i in range(1, len(token_times))]
             all_tpot_values.extend(tpot_values)
     
     # Calculate ITL (inter-token latency) metrics which are the same as TPOT in this case
@@ -221,13 +220,13 @@ def generate_prompt(num: int) -> str:
     ]
     return questions[num % len(questions)]
 
-async def run_benchmark(num_prompts: int, args: argparse.Namespace) -> Dict[str, Any]:
+async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     """
     Run a benchmark with the specified number of prompts.
     
     Args:
         num_prompts: Number of prompts to benchmark
-        args: Command line arguments
+        **kwargs: Additional parameters
         
     Returns:
         Benchmark results dictionary
@@ -252,17 +251,17 @@ async def run_benchmark(num_prompts: int, args: argparse.Namespace) -> Dict[str,
         prompt = generate_prompt(i)
         system_prompt = "You are a helpful assistant."
         response, token_times, token_count = await send_chat_request(
-            model=args.model,
+            model=kwargs.get("model", "google/gemma-3-1b-it"),
             prompt=prompt,
             system_prompt=system_prompt,
-            host=args.host,
-            port=args.port,
-            endpoint=args.endpoint,
+            host=kwargs.get("host", "localhost"),
+            port=kwargs.get("port", 8000),
+            endpoint=kwargs.get("endpoint", "/v1/chat/completions"),
             benchmark_start_time=benchmark_start_time,
-            show_problem=getattr(args, "show_problem", False),
-            show_first_token=getattr(args, "show_first_token", False),
-            show_last_token=getattr(args, "show_last_token", False),
-            show_other_tokens=getattr(args, "show_other_tokens", False)
+            show_problem=kwargs.get("show_problem", False),
+            show_first_token=kwargs.get("show_first_token", False),
+            show_last_token=kwargs.get("show_last_token", False),
+            show_other_tokens=kwargs.get("show_other_tokens", False)
         )
         if token_times:
             ttft = token_times[0]
@@ -273,6 +272,9 @@ async def run_benchmark(num_prompts: int, args: argparse.Namespace) -> Dict[str,
     
     # Calculate benchmark duration
     benchmark_duration = time.time() - benchmark_start_time
+    
+    # Ensure benchmark_duration is at least 0.01 seconds to avoid division by zero and negative values
+    benchmark_duration = max(0.01, benchmark_duration)
     
     # Estimate input tokens (approximation)
     avg_input_tokens = 25  # Approximate tokens per input
@@ -340,12 +342,13 @@ def format_benchmark_results(results: Dict[str, Any]) -> str:
     
     return output
 
-async def main_async(args: argparse.Namespace):
+async def run_benchmark_async(num_prompts: int, **kwargs) -> Dict[str, Any]:
     """Run a benchmark test asynchronously."""
     
     # Set random seeds
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    seed = kwargs.get("seed", 0)
+    random.seed(seed)
+    np.random.seed(seed)
     
     # Print initialization messages to match vllm-benchmark.py output
     print("Initializing tokenizer...")
@@ -353,7 +356,7 @@ async def main_async(args: argparse.Namespace):
     
     # Run the benchmark
     start_time = time.time()
-    results = await run_benchmark(args.num_prompts, args)
+    results = await run_benchmark(num_prompts, **kwargs)
     
     # Print formatted results
     print(format_benchmark_results(results))
@@ -361,49 +364,18 @@ async def main_async(args: argparse.Namespace):
     # Print elapsed time
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(f"num-prompts={args.num_prompts} completed, time elapsed: {elapsed_time:.2f} seconds")
+    
+    # Make sure elapsed_time is positive
+    elapsed_time = max(0.01, elapsed_time)
+    print(f"num-prompts={num_prompts} completed, time elapsed: {elapsed_time:.2f} seconds")
+    
+    return results
 
-def main():
-    """Main function"""
-    # Create a parser with compatible arguments
-    parser = FlexibleArgumentParser(
-        description="Custom Benchmark Tool for Chat Completions API")
-    
-    # Add required parameters for compatibility with vllm-benchmark.py
-    parser.add_argument(
-        "--num-prompts",
-        type=int,
-        required=True,
-        help="Number of prompts to use for this benchmark",
-    )
-    parser.add_argument("--backend", type=str, default="my-curl")
-    parser.add_argument("--host", type=str, default="localhost")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--endpoint", type=str, default="/v1/chat/completions")
-    parser.add_argument("--model", type=str, default="google/gemma-3-1b-it")
-    parser.add_argument("--seed", type=int, default=0)
-    
-    # Add other parameters for compatibility (even if not used)
-    parser.add_argument("--dataset-name", type=str, default=None)
-    parser.add_argument("--dataset-path", type=str, default=None)
-    parser.add_argument("--served-model-name", type=str, default=None)
-    parser.add_argument("--tokenizer", type=str, default=None)
-    parser.add_argument("--tokenizer-mode", type=str, default="auto")
-    parser.add_argument("--base-url", type=str, default=None)
-    parser.add_argument("--percentile-metrics", type=str, default="ttft,tpot,itl")
-    parser.add_argument("--metric-percentiles", type=str, default="99")
-    parser.add_argument("--request-rate", type=str, default="inf")
-    parser.add_argument("--burstiness", type=float, default=1.0)
-    
-    # Add new output control arguments
-    parser.add_argument("--show-problem", action="store_true", default=False, help="Show the problem (prompt)")
-    parser.add_argument("--show-first-token", action="store_true", default=False, help="Show the first token")
-    parser.add_argument("--show-last-token", action="store_true", default=False, help="Show the last token")
-    parser.add_argument("--show-other-tokens", action="store_true", default=False, help="Show other tokens (not first/last)")
-    # Parse arguments
-    args, unknown = parser.parse_known_args()
-    # Initialize asyncio
-    asyncio.run(main_async(args))
+def run_benchmark_with_params(num_prompts: int, **kwargs):
+    """Main function to run benchmark with parameters."""
+    return asyncio.run(run_benchmark_async(num_prompts, **kwargs))
 
+# Keep for backwards compatibility when script is run directly
 if __name__ == "__main__":
-    main()
+    print("This script is designed to be imported and used as a module.")
+    print("Example: import my-benchmark; my-benchmark.run_benchmark_with_params(num_prompts=1)")

@@ -21,7 +21,7 @@ This is the original [vllm/benchmarks](https://github.com/vllm-project/vllm/tree
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip install vllm pandas datasets
+uv pip install -r requirements.txt
 python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b-it --host localhost --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --num-prompts 1
 ```
 
@@ -30,7 +30,6 @@ python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b
 The `run-llm-loadtest.sh` script is a convenient wrapper that runs `llm-loadtest.py` followed by `generate-all.py` to generate all output files automatically.
 
 ```bash
-uv pip install matplotlib
 chmod +x ./run-llm-loadtest.sh
 ./run-llm-loadtest.sh --backend vllm --model google/gemma-3-1b-it --prompts-list 1,5,10 --output-dir ./results
 ```
@@ -67,14 +66,51 @@ All options are available as boolean fields in `llm-loadtest.json` as well:
 Example usage:
 
 ```bash
-python3 my-benchmark.py --model google/gemma-3-1b-it --num-prompts 1 --show-problem --show-first-token
+python3 llm-loadtest.py --config llm-loadtest.json --prompts-list 1,2,3
 ```
+
+## New: Module-Based Benchmarking
+
+Both `vllm-benchmark.py` and `my-benchmark.py` now support being used as modules. Instead of using command-line arguments, you can now import these modules and directly call their functions with parameters:
+
+```python
+# Using my-benchmark.py as a module
+import my_benchmark
+
+results = my_benchmark.run_benchmark_with_params(
+    num_prompts=1,
+    model="google/gemma-3-1b-it",
+    host="localhost",
+    port=8000,
+    endpoint="/v1/chat/completions",
+    show_problem=True,
+    show_first_token=True
+)
+
+# Using vllm-benchmark.py as a module
+import vllm_benchmark
+
+results = vllm_benchmark.run_benchmark_with_params(
+    num_prompts=1,
+    model="google/gemma-3-1b-it",
+    backend="openai",
+    host="localhost",
+    port=8000,
+    endpoint="/v1/completions",
+    dataset_name="sonnet",
+    dataset_path="benchmarks/sonnet.txt"
+)
+```
+
+This allows for easier integration with other Python code and programmatic control of benchmark parameters.
+
+The `llm-loadtest.py` script has been updated to use this module approach internally, while maintaining the same command-line interface and JSON configuration capabilities.
 
 ---
 
 ## Run [llm-loadtest.py](llm-loadtest.py) with [vllm-benchmark.py](vllm-benchmark.py) or [my-benchmark.py](my-benchmark.py)
 
-The `llm-loadtest.py` script coordinates load testing by calling either `vllm-benchmark.py` (default) or `my-benchmark.py` with different `num-prompts` values, managing configuration, and collecting results.
+The `llm-loadtest.py` script coordinates load testing by importing either `vllm-benchmark.py` (default) or `my-benchmark.py` as modules and calling their benchmarking functions with different `num-prompts` values, managing configuration, and collecting results.
 
 - `vllm-benchmark.py` - Uses vLLM's internal benchmark functionality
 - `my-benchmark.py` - A Python-based benchmark script using standard HTTP requests for API calls

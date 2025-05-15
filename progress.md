@@ -127,3 +127,14 @@ GPT-4.1:
 - show-other-tokens 顯示中間其他的 token
 它們的預設值均為 False。
 在 my-benchmark.py 的命令列參數，以及 llm-loadtest.json 中增加上述參數。
+
+Claude 3.7 Sonnet:
+48. 向 my-benchmark.py/vllm-benchmark.py 的呼叫，請不要用命令列參數，而是直接當 module 載入後直接呼叫函式。請將命令列參數相關功能均刪除。但仍然保留截取 stdio 輸出以取得統計值的整合模式。
+
+GPT-4.1:
+49. 怎麼一堆負值? 而且時間格式沒有遵照 mm:ss.fff 格式。
+50. #terminalSelection (vllm-benchmark.py 執行錯誤)
+51. #terminalSelection 在這次修改之前，同一個 json 設定檔先前是正常的，model 都有傳，tokenizer 都是 null。請再仔細檢查，包括引用的 benchmark_serving.py 看正確參數應該怎麼傳遞是合法的。
+52. #terminalSelection 請再全面檢查參數傳遞問題。
+53. o4-mini: #terminalSelection 還是不行，請仔細檢查。
+54. 

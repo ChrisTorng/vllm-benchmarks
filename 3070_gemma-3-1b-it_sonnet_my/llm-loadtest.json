@@ -1,6 +1,10 @@
 {
   "benchmark_script": "my-benchmark.py",
   "output_dir": ".",
+  "show_problem": true,
+  "show_first_token": true,
+  "show_last_token": true,
+  "show_other_tokens": true,
   "backend": "vllm",
   "base_url": null,
   "host": "127.0.0.1",

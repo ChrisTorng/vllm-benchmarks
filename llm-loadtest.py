@@ -3,8 +3,8 @@
 """
 LLM Load Testing Tool
 
-This script coordinates load testing by calling a benchmark script with
-different num-prompts values, managing configuration, and collecting results.
+This script coordinates load testing by importing benchmark modules and calling their functions
+with different num-prompts values, managing configuration, and collecting results.
 
 Usage:
     python llm-loadtest.py 
@@ -21,9 +21,11 @@ import os
 import sys
 import time
 import traceback
-import subprocess
+import io
+import contextlib
+import importlib.util
 import json
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Callable, Union
 
 try:
     import pandas as pd
@@ -161,57 +163,85 @@ def plot_llm_loadtest_chart(df_source: Any,  # pd.DataFrame or str
         plt.close('all')
 
 
-def run_benchmark(num_prompts: int, config: Dict[str, Any], benchmark_script: str, options: List[str] = None) -> str:
+def load_benchmark_module(benchmark_script: str) -> Callable:
     """
-    Run a benchmark script as a subprocess with the given num_prompts value and config options.
+    Load a benchmark module and return its run_benchmark_with_params function.
+    
+    Args:
+        benchmark_script: Path to the benchmark script to load
+        
+    Returns:
+        run_benchmark_with_params function from the module
+    """
+    # Normalize the path and get the module name
+    benchmark_script = os.path.normpath(benchmark_script)
+    if benchmark_script.endswith('.py'):
+        module_name = os.path.basename(benchmark_script)[:-3]
+    else:
+        module_name = os.path.basename(benchmark_script)
+    
+    # Handle special case for module names with hyphens
+    if '-' in module_name:
+        module_name = module_name.replace('-', '_')
+    
+    # Try to import the module from the current directory
+    try:
+        # Try loading as a module in the current path
+        spec = importlib.util.spec_from_file_location(module_name, benchmark_script)
+        if spec is None:
+            raise ImportError(f"Could not load module spec from {benchmark_script}")
+        
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        
+        # Check if the module has the required function
+        if not hasattr(module, 'run_benchmark_with_params'):
+            raise AttributeError(f"Module {module_name} does not have run_benchmark_with_params function")
+        
+        return module.run_benchmark_with_params
+    except Exception as e:
+        print(f"Error loading benchmark module {benchmark_script}: {e}")
+        traceback.print_exc()
+        sys.exit(1)
+
+
+def run_benchmark(num_prompts: int, config: Dict[str, Any], benchmark_function: Callable) -> str:
+    """
+    Run a benchmark function with the given num_prompts value and config options.
     
     Args:
         num_prompts: Number of prompts to test
         config: Dictionary containing configuration parameters
-        benchmark_script: Benchmark script to run (e.g., "vllm-benchmark.py" or "my-benchmark.py")
-        options: Additional command-line options to pass to the benchmark script
+        benchmark_function: Function to call for running the benchmark
         
     Returns:
-        The captured output from the benchmark script
+        The captured output from the benchmark function
     """
-    # Build the command with all necessary parameters
-    cmd = ["python3", benchmark_script, "--num-prompts", str(num_prompts)]
+    # Create a copy of the config to avoid modifying the original
+    config_copy = config.copy()
     
-    # Add all config parameters as command-line arguments
-    for key, value in config.items():
-        # Skip prompts_list as it's specific to llm-loadtest.py
-        if key == "prompts_list" or key == "output_dir" or key == "benchmark_script":
-            continue
-            
-        # Handle special cases
-        if key == "percentile_metrics" and isinstance(value, list):
-            value = ",".join(value)
-        elif key == "metric_percentiles" and isinstance(value, list):
-            value = ",".join([str(p) for p in value])
-        elif value is True:
-            cmd.append(f"--{key.replace('_', '-')}")
-            continue
-        elif value is False or value is None:
-            continue
-        
-        # Add the parameter to the command - use space instead of equals sign
-        cmd.append(f"--{key.replace('_', '-')}")
-        cmd.append(f"{value}")
+    # Remove parameters specific to llm-loadtest.py
+    if 'prompts_list' in config_copy:
+        del config_copy['prompts_list']
+    if 'output_dir' in config_copy:
+        del config_copy['output_dir']
+    if 'benchmark_script' in config_copy:
+        del config_copy['benchmark_script']
     
-    # Add any additional options
-    if options:
-        cmd.extend(options)
+    # Run the benchmark function and capture output
+    print(f"Running benchmark with num_prompts={num_prompts}")
     
-    # Run the command and capture output
-    print(f"Running command: {' '.join(cmd)}")
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Error running {benchmark_script}: {e}")
-        print(f"stdout: {e.stdout}")
-        print(f"stderr: {e.stderr}")
-        raise
+    # Capture stdout to get the benchmark output
+    f = io.StringIO()
+    with contextlib.redirect_stdout(f):
+        try:
+            benchmark_function(num_prompts=num_prompts, **config_copy)
+        except Exception as e:
+            print(f"Error running benchmark: {e}")
+            traceback.print_exc(file=f)
+            return f.getvalue()
+    
+    return f.getvalue()
 
 
 def main():
@@ -243,7 +273,6 @@ def main():
         help="Benchmark script to use (default: vllm-benchmark.py)",
     )
     args = parser.parse_args()
-
 
     # Load config from JSON file, supporting comments (//, #, /* ... */)
     def strip_json_comments(json_str: str) -> str:
@@ -285,6 +314,9 @@ def main():
     benchmark_script = args.benchmark_script
     if config.get('benchmark_script'):
         benchmark_script = config.get('benchmark_script')
+    
+    # Load the benchmark module
+    benchmark_function = load_benchmark_module(benchmark_script)
 
     # Get the list of num_prompts values to test
     prompts_list = [int(x) for x in config['prompts_list'].split(",")]
@@ -308,7 +340,7 @@ def main():
     raw_file_path = os.path.join(detail_dir, f"{base_filename}.raw.txt")
     results_file_path = os.path.join(detail_dir, f"{base_filename}.results.txt")
     
-    # --- Capture all output from vllm-benchmark.py ---
+    # --- Capture all output from benchmark function ---
     raw_outputs = []
     results = []
     
@@ -317,7 +349,7 @@ def main():
         
         start_time = time.time()
         try:
-            captured_output = run_benchmark(num_prompts, config, benchmark_script)
+            captured_output = run_benchmark(num_prompts, config, benchmark_function)
             
             # Print the captured output
             print(captured_output, end="")
