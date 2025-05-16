@@ -161,3 +161,13 @@ Claude 3.7 Sonnet:
 61. 實測中，完全沒發現有平行發送的情況，請檢查程式碼。
 62. 我已用 uv pip install aiohttp 安裝完畢，請繼續。
 63. my-benchmark.py 請加上 warm-up 機制，在正式開始前，先發送一次要求，並不計入正式的統計數據。warm-up 的要求會與正式的要求一樣，依 show_* 參數之要求，顯示在螢幕上，但不會寫入檔案。
+
+增加自訂問題集:
+64. 請刪除 my-benchmark.py 內建的問題，改為從檔案讀取問題集。若參數 dataset_name 為 multiline，則由 dataset_path 讀取問題集檔案路徑名。比如現在已建立 easy.md，代表由 config 路徑下的 easy.md 讀取問題集。檔案內格式為:
+```
+1. 問題一
+2. 問題二
+```
+另增加 dataset_count 參數，代表要從問題集讀取的題目數量，若為 null 則讀取全部題目。實際需要更多的題目，則循環回頭使用。讀取問題集必須在 warm-up 之前全部完成，不要在壓測正式開始當中再讀取。
+若是其他的 dataset_name 值則不支援，傳回錯誤。
+65. #terminalSelection dataset_path 要由 config 為基底路徑，像此例 easy.md 是與 config 同一個路徑。

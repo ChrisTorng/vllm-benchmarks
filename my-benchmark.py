@@ -19,10 +19,14 @@ import datetime
 import statistics
 import asyncio
 import random
+import re
 from typing import List, Dict, Any, Optional, Tuple, Union
 import numpy as np
 import aiohttp
 import socket
+
+# Global variable to store loaded prompts
+loaded_prompts = []
 
 def format_time(seconds: float) -> str:
     """Format time in MM:SS.MMM format."""
@@ -222,21 +226,51 @@ def calculate_metrics(all_ttfts: List[float], all_token_times: List[List[float]]
         "p99_itl_ms": p99_tpot
     }
 
-def generate_prompt(num: int) -> str:
-    """Generate a unique prompt based on number."""
-    questions = [
-        "Who won the world series in 2020?",
-        "What is quantum computing?",
-        "Can you explain the theory of relativity?",
-        "How does photosynthesis work?",
-        "What was the Renaissance period?",
-        "Explain the water cycle",
-        "What is artificial intelligence?",
-        "How do vaccines work?",
-        "What causes northern lights?",
-        "Explain how a combustion engine works"
-    ]
-    return questions[num % len(questions)]
+def load_prompts_from_file(file_path: str) -> List[str]:
+    """
+    Load prompts from a file.
+    
+    Args:
+        file_path: Path to the file containing prompts
+        
+    Returns:
+        List of prompts
+    """
+    # Check if file exists
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Prompt file not found: {file_path}")
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Extract numbered lines (1. prompt, 2. prompt, etc.)
+    prompts = re.findall(r'^\d+\.\s*(.*?)$', content, re.MULTILINE)
+    
+    if not prompts:
+        raise ValueError(f"No prompts found in the file: {file_path}")
+    
+    print(f"Loaded {len(prompts)} prompts from {file_path}")
+    
+    return prompts
+
+def get_prompt(index: int, dataset_path: Optional[str] = None, dataset_name: Optional[str] = None) -> str:
+    """
+    Get a prompt by index. If loaded_prompts is available, use it.
+    
+    Args:
+        index: Index of the prompt to return
+        dataset_path: Path to the dataset file
+        dataset_name: Name of the dataset
+        
+    Returns:
+        Prompt string
+    """
+    global loaded_prompts
+    
+    if not loaded_prompts:
+        raise ValueError("No prompts loaded. Please ensure that dataset_name='multiline' and dataset_path are properly configured.")
+    
+    return loaded_prompts[index % len(loaded_prompts)]
 
 async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     """
@@ -262,7 +296,7 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     
     # Perform warm-up run first
     print("Starting warm-up run...")
-    warm_up_prompt = generate_prompt(0)
+    warm_up_prompt = get_prompt(0)
     system_prompt = "You are a helpful assistant."
     
     # Execute warm-up request
@@ -296,7 +330,7 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     benchmark_start_time = time.time()
     
     # Create batches of prompts
-    prompts = [generate_prompt(i) for i in range(num_prompts)]
+    prompts = [get_prompt(i) for i in range(num_prompts)]
     
     # Prepare tasks to be processed in parallel batches
     async def process_prompt(prompt_index, thread_id, thread_seq):
@@ -447,6 +481,40 @@ async def run_benchmark_async(num_prompts: int, **kwargs) -> Dict[str, Any]:
     # Print initialization messages to match vllm-benchmark.py output
     print("Initializing tokenizer...")
     print("Initializing dataset...")
+    
+    # Load prompts from file if specified
+    global loaded_prompts
+    dataset_name = kwargs.get("dataset_name")
+    dataset_path = kwargs.get("dataset_path")
+    dataset_count = kwargs.get("dataset_count")
+    config_path = kwargs.get("_config_path", "")
+    
+    # Only support multiline dataset format
+    if dataset_name:
+        if dataset_name == "multiline":
+            if dataset_path:
+                try:
+                    # Resolve dataset_path relative to config file location if it's not absolute
+                    resolved_dataset_path = dataset_path
+                    if config_path and not os.path.isabs(dataset_path):
+                        config_dir = os.path.dirname(os.path.abspath(config_path))
+                        resolved_dataset_path = os.path.join(config_dir, dataset_path)
+                    
+                    # Load the prompts from the file
+                    prompts = load_prompts_from_file(resolved_dataset_path)
+                    
+                    # Limit number of prompts if dataset_count is provided
+                    if dataset_count is not None:
+                        prompts = prompts[:int(dataset_count)]
+                    
+                    loaded_prompts = prompts
+                except Exception as e:
+                    print(f"Error loading prompts from {resolved_dataset_path}: {e}")
+                    raise
+            else:
+                raise ValueError("dataset_path must be provided when dataset_name is 'multiline'")
+        else:
+            raise ValueError(f"Unsupported dataset_name: {dataset_name}. Only 'multiline' is supported.")
     
     # Get max_concurrency from kwargs
     max_concurrency = kwargs.get("max_concurrency", None)

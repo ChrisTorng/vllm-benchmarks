@@ -4,6 +4,20 @@ The [benchmarks](benchmarks) folder is a clone from [vllm/benchmarks](https://gi
 
 Linux (Ubuntu) and WSL are supported and tested. Windows is not supported because of vllm.
 
+## New Features
+
+- Support for loading prompts from file in `my-benchmark.py`
+  - Added `dataset_name` parameter: When set to "multiline", reads prompts from the file specified by `dataset_path`
+  - Added `dataset_count` parameter: Specifies how many prompts to load from the file (if null, loads all prompts)
+  - File format example:
+    ```
+    1. First question
+    2. Second question
+    ```
+  - Prompts are loaded before benchmark starts to avoid loading during tests
+  - File paths are resolved relative to the config file location
+  - Prompts cycle through if more are needed than available
+
 ## Run [vLLM](https://github.com/vllm-project/vllm/) with LLM [google/gemma-3-1b-it](https://huggingface.co/google/gemma-3-1b-it)
 
 - [vLLM - Installation](https://docs.vllm.ai/en/latest/getting_started/installation.html) 

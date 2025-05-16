@@ -251,6 +251,8 @@ def run_benchmark(num_prompts: int, config: Dict[str, Any], benchmark_function: 
     tee = TeeStream(sys.stdout, f)
     with contextlib.redirect_stdout(tee):
         try:
+            # Pass the config file path to the benchmark function
+            config_copy['_config_path'] = os.path.abspath(config.get('_config_path', ''))
             benchmark_function(num_prompts=num_prompts, **config_copy)
         except Exception as e:
             print(f"Error running benchmark: {e}")
@@ -325,6 +327,8 @@ def main():
     # Merge config and command line arguments
     config['prompts_list'] = args.prompts_list
     config['output_dir'] = resolved_output_dir
+    # Store the original config file path for resolving relative paths
+    config['_config_path'] = config_path
     
     # Get benchmark script from command line or config
     benchmark_script = args.benchmark_script
