@@ -160,3 +160,4 @@ Claude 3.7 Sonnet:
 以上 current_thread_id 代表平行發送中目前的虛擬 thread id，由 1 起算。current_thread_seq 代表該 thread 處理的第幾個要求，由 1 起算。
 61. 實測中，完全沒發現有平行發送的情況，請檢查程式碼。
 62. 我已用 uv pip install aiohttp 安裝完畢，請繼續。
+63. my-benchmark.py 請加上 warm-up 機制，在正式開始前，先發送一次要求，並不計入正式的統計數據。warm-up 的要求會與正式的要求一樣，依 show_* 參數之要求，顯示在螢幕上，但不會寫入檔案。

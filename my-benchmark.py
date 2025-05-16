@@ -259,8 +259,30 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     print(f"\nRunning test with num-prompts = {num_prompts}")
     print(f"Concurrent requests = {actual_concurrency}")
     print(f"Max requests per batch = {requests_per_batch}")
-    print("Starting initial single prompt test run...")
-    print("Initial test run completed. Starting main benchmark run...")
+    
+    # Perform warm-up run first
+    print("Starting warm-up run...")
+    warm_up_prompt = generate_prompt(0)
+    system_prompt = "You are a helpful assistant."
+    
+    # Execute warm-up request
+    _, _, _ = await send_chat_request(
+        model=kwargs.get("model", "google/gemma-3-1b-it"),
+        prompt=warm_up_prompt,
+        system_prompt=system_prompt,
+        host=kwargs.get("host", "localhost"),
+        port=kwargs.get("port", 8000),
+        endpoint=kwargs.get("endpoint", "/v1/chat/completions"),
+        benchmark_start_time=time.time(),  # Use current time as benchmark start for warm-up
+        thread_id=0,  # Use thread_id 0 to indicate warm-up
+        thread_seq=0,  # Use thread_seq 0 to indicate warm-up
+        show_problem=kwargs.get("show_problem", False),
+        show_first_token=kwargs.get("show_first_token", False),
+        show_other_tokens=kwargs.get("show_other_tokens", False),
+        show_stream_ended=kwargs.get("show_stream_ended", False)
+    )
+    
+    print("Warm-up run completed. Starting main benchmark run...")
     print(f"Traffic request rate: inf")
     print(f"Burstiness factor: 1.0 (Poisson process)")
     print(f"Maximum request concurrency: {actual_concurrency}")
@@ -275,7 +297,6 @@ async def run_benchmark(num_prompts: int, **kwargs) -> Dict[str, Any]:
     
     # Create batches of prompts
     prompts = [generate_prompt(i) for i in range(num_prompts)]
-    system_prompt = "You are a helpful assistant."
     
     # Prepare tasks to be processed in parallel batches
     async def process_prompt(prompt_index, thread_id, thread_seq):

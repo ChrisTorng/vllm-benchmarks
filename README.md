@@ -155,6 +155,24 @@ When the benchmark starts, it will display:
 
 This new parallel processing capability allows for more accurate testing of API endpoint performance under varying load conditions.
 
+## New: Warm-up Mechanism
+
+`my-benchmark.py` now includes a warm-up mechanism that sends a single request before the actual benchmark to prime the model and connection. This helps provide more accurate and stable measurements by eliminating cold-start effects.
+
+### Key Features:
+
+- Automatically performs a warm-up request before the main benchmark begins
+- The warm-up request is displayed according to the same `show_*` parameters as the main benchmark
+- Results from the warm-up are not included in the final benchmark statistics
+- The warm-up uses thread_id=0 and thread_seq=0 to clearly distinguish it from benchmark requests
+
+The warm-up mechanism is particularly useful for:
+- Ensuring the model is loaded into memory before timing begins
+- Establishing network connections before the benchmark
+- Providing more consistent results across multiple runs
+
+No configuration is needed - warm-up happens automatically for every benchmark run.
+
 ## Run [llm-loadtest.py](llm-loadtest.py) with [vllm-benchmark.py](vllm-benchmark.py) or [my-benchmark.py](my-benchmark.py)
 
 The `llm-loadtest.py` script coordinates load testing by importing either `vllm-benchmark.py` (default) or `my-benchmark.py` as modules and calling their benchmarking functions with different `num-prompts` values, managing configuration, and collecting results.
