@@ -1,75 +1,85 @@
-# [vllm-benchmarks](https://github.com/ChrisTorng/vllm-benchmarks)
+# vllm-benchmarks
 
 The [benchmarks](benchmarks) folder is a clone from [vllm/benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks).
 
-Linux (Ubuntu) and WSL are supported and tested. Windows is not supported because of vllm.
+Supported: Linux (Ubuntu), WSL. Windows is not supported.
 
-## New Features
+## Installation
 
-- Support for loading prompts from file in `my-benchmark.py`
-  - Added `dataset_name` parameter: When set to "multiline", reads prompts from the file specified by `dataset_path`
-  - Added `dataset_count` parameter: Specifies how many prompts to load from the file (if null, loads all prompts)
-  - File format example:
-    ```
-    1. First question
-    2. Second question
-    ```
-  - Prompts are loaded before benchmark starts to avoid loading during tests
-  - File paths are resolved relative to the config file location
-  - Prompts cycle through if more are needed than available
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/ChrisTorng/vllm-benchmarks.git
+   cd vllm-benchmarks
+   ```
+2. Set up Python environment:
+   ```bash
+   uv venv
+   source .venv/bin/activate
+   uv pip install -r requirements.txt
+   ```
+3. (Optional) Authenticate Hugging Face for model access:
+   ```bash
+   huggingface-cli login
+   ```
 
-## Run [vLLM](https://github.com/vllm-project/vllm/) with LLM [google/gemma-3-1b-it](https://huggingface.co/google/gemma-3-1b-it)
+## Running vLLM Server
 
-- [vLLM - Installation](https://docs.vllm.ai/en/latest/getting_started/installation.html) 
-- [google/gemma-3-1b-it](https://huggingface.co/google/gemma-3-1b-it) acquire authentication
-- [Hugging Face - Access Token](https://huggingface.co/settings/tokens) - [Create new token]
-- ```bash
-  huggingface-cli login
-  vllm serve "google/gemma-3-1b-it" --disable-log-requests
-  ```
+Start vLLM with your model (e.g., google/gemma-3-1b-it):
+```bash
+vllm serve "google/gemma-3-1b-it" --disable-log-requests
+```
 
-## Run [benchmark_serving.py](benchmarks/benchmark_serving.py)
+## Benchmarking
 
-This is the original [vllm/benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks).
+### 1. Run Original Benchmark
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
 python3 benchmarks/benchmark_serving.py --backend vllm --model google/gemma-3-1b-it --host localhost --endpoint /v1/completions --dataset-name sonnet --dataset-path benchmarks/sonnet.txt --num-prompts 1
 ```
 
-## Run [run-llm-loadtest.sh](run-llm-loadtest.sh)
+### 2. Run Load Test Script
 
-The `run-llm-loadtest.sh` script is a convenient wrapper that runs `llm-loadtest.py` followed by `generate-all.py` to generate all output files automatically.
+The `run-llm-loadtest.sh` script runs `llm-loadtest.py` and then `generate-all.py` automatically.
 
 ```bash
 chmod +x ./run-llm-loadtest.sh
 ./run-llm-loadtest.sh --backend vllm --model google/gemma-3-1b-it --prompts-list 1,5,10 --output-dir ./results
 ```
 
-Key features:
-- Runs `llm-loadtest.py` with all arguments you provide
-- Automatically runs `generate-all.py` on the output directory after completion 
-- Determines the output directory in the following order:
-  1. From `--output-dir` parameter if provided
-  2. From `--config` file directory if provided
-  3. Default to current script directory if neither specified
+- All arguments are passed to `llm-loadtest.py`.
+- Output directory is determined by `--output-dir`, `--config` file location, or defaults to script directory.
+- After tests, `generate-all.py` is run on the output directory.
 
+### 3. Run Custom Benchmark Script
 
-## my-benchmark.py streaming output and new options
+`my-benchmark.py` benchmarks LLM API endpoints using Python HTTP requests. Example:
 
-`my-benchmark.py` now supports real-time streaming output for tokens and prompt display. You can control the display of the prompt and tokens using the following command-line arguments (or set them in `llm-loadtest.json`):
+```bash
+uv pip install -r requirements.txt
+./run-llm-loadtest.sh --benchmark-script my-benchmark.py --config llm-loadtest.json --prompts-list 1,2,3
+```
 
-- `--show-problem` (default: False): Show the prompt (problem) before sending the request
-- `--show-first-token` (default: False): Show the first token received from the stream
-- `--show-other-tokens` (default: False): Show all tokens except the first token received from the stream
-- `--show-stream-ended` (default: False): Show an [end] message after the stream completes
+### 4. Run Result Generation
 
-All options are available as boolean fields in `llm-loadtest.json` as well:
+Process results and generate analysis files:
 
+```bash
+python3 generate-all.py ./results
+```
+
+- Generates sorted, averaged, and chart files in the output directory.
+
+## Configuration
+
+- All parameters except `prompts-list` are set in a JSON config file (default: `llm-loadtest.json`).
+- Only `prompts-list` is required on the command line.
+- Comments are supported in the config file (`//`, `#`, `/* ... */`).
+
+Example config (`llm-loadtest.json`):
 ```jsonc
 {
+  "benchmark_script": "my-benchmark.py",
+  "max_concurrency": 5,
   "show_problem": false,
   "show_first_token": false,
   "show_other_tokens": false,
@@ -77,235 +87,41 @@ All options are available as boolean fields in `llm-loadtest.json` as well:
 }
 ```
 
-Example usage:
+## Module Usage
 
-```bash
-python3 llm-loadtest.py --config llm-loadtest.json --prompts-list 1,2,3
-```
-
-## New: Module-Based Benchmarking
-
-Both `vllm-benchmark.py` and `my-benchmark.py` now support being used as modules. Instead of using command-line arguments, you can now import these modules and directly call their functions with parameters:
+You can import benchmark scripts as modules:
 
 ```python
-# Using my-benchmark.py as a module
 import my_benchmark
+results = my_benchmark.run_benchmark_with_params(num_prompts=1, model="google/gemma-3-1b-it", host="localhost", port=8000, endpoint="/v1/chat/completions")
 
-results = my_benchmark.run_benchmark_with_params(
-    num_prompts=1,
-    model="google/gemma-3-1b-it",
-    host="localhost",
-    port=8000,
-    endpoint="/v1/chat/completions",
-    show_problem=True,
-    show_first_token=True
-)
-
-# Using vllm-benchmark.py as a module
 import vllm_benchmark
-
-results = vllm_benchmark.run_benchmark_with_params(
-    num_prompts=1,
-    model="google/gemma-3-1b-it",
-    backend="openai",
-    host="localhost",
-    port=8000,
-    endpoint="/v1/completions",
-    dataset_name="sonnet",
-    dataset_path="benchmarks/sonnet.txt"
-)
+results = vllm_benchmark.run_benchmark_with_params(num_prompts=1, model="google/gemma-3-1b-it", backend="openai", host="localhost", port=8000, endpoint="/v1/completions", dataset_name="sonnet", dataset_path="benchmarks/sonnet.txt")
 ```
 
-This allows for easier integration with other Python code and programmatic control of benchmark parameters.
+## Features (Summary)
 
-The `llm-loadtest.py` script has been updated to use this module approach internally, while maintaining the same command-line interface and JSON configuration capabilities.
-
----
-
-## New: Parallel Request Processing
-
-`my-benchmark.py` now supports parallel request processing controlled by the `max_concurrency` parameter in the configuration file. This allows for more realistic load testing by simulating multiple concurrent users.
-
-### Configuration Options:
-
-- `max_concurrency`: Controls how many requests are processed in parallel
-  - When set to `null` (default), all requests are sent in parallel at once
-  - When set to a specific number (e.g., `5`), requests are processed in batches of that size
-  - When set to `1`, requests are processed sequentially (as in previous versions)
-
-### Output Format:
-
-The output format for tokens has been enhanced to include thread identification:
-```
-MM:SS.MMM MM:SS.MMM THREAD_ID    THREAD_SEQ    TOKEN_TEXT
-```
-Where:
-- First timestamp is global time since benchmark start
-- Second timestamp is relative time since request
-- `THREAD_ID` is the virtual thread ID (1-based) in the current batch
-- `THREAD_SEQ` is the sequence number (1-based) of the request in that thread
-- Last element is the token content
-
-### Example Configuration:
-
-```jsonc
-{
-  "benchmark_script": "my-benchmark.py",
-  "max_concurrency": 5,  // Process 5 requests at a time
-  // ... other configuration options
-}
-```
-
-### Example Usage:
-
-```bash
-./run-llm-loadtest.sh --benchmark-script my-benchmark.py --config llm-loadtest.json --prompts-list 10,20,50
-```
-
-When the benchmark starts, it will display:
-- Total number of prompts being tested
-- Actual concurrency being used
-- Maximum requests per batch
-
-This new parallel processing capability allows for more accurate testing of API endpoint performance under varying load conditions.
-
-## New: Warm-up Mechanism
-
-`my-benchmark.py` now includes a warm-up mechanism that sends a single request before the actual benchmark to prime the model and connection. This helps provide more accurate and stable measurements by eliminating cold-start effects.
-
-### Key Features:
-
-- Automatically performs a warm-up request before the main benchmark begins
-- The warm-up request is displayed according to the same `show_*` parameters as the main benchmark
-- Results from the warm-up are not included in the final benchmark statistics
-- The warm-up uses thread_id=0 and thread_seq=0 to clearly distinguish it from benchmark requests
-
-The warm-up mechanism is particularly useful for:
-- Ensuring the model is loaded into memory before timing begins
-- Establishing network connections before the benchmark
-- Providing more consistent results across multiple runs
-
-No configuration is needed - warm-up happens automatically for every benchmark run.
-
-## Run [llm-loadtest.py](llm-loadtest.py) with [vllm-benchmark.py](vllm-benchmark.py) or [my-benchmark.py](my-benchmark.py)
-
-The `llm-loadtest.py` script coordinates load testing by importing either `vllm-benchmark.py` (default) or `my-benchmark.py` as modules and calling their benchmarking functions with different `num-prompts` values, managing configuration, and collecting results.
-
-- `vllm-benchmark.py` - Uses vLLM's internal benchmark functionality
-- `my-benchmark.py` - A Python-based benchmark script using standard HTTP requests for API calls
-
-Choosing between benchmark scripts:
-```bash
-# Use default vllm-benchmark.py
-python3 llm-loadtest.py --prompts-list 1,2,3
-
-# Use custom my-benchmark.py
-python3 llm-loadtest.py --prompts-list 1,2,3 --benchmark-script my-benchmark.py
-
-# Or define in config file
-# "benchmark_script": "my-benchmark.py"
-```
-
-Key features:
-- Performs initialization only once, then runs tests with different prompt counts
-- Supports all standard benchmark_serving.py parameters
-- Produces a summary report comparing results from all test runs
-- Uses `--prompts-list` parameter to define which prompt counts to test (comma-separated)
-- Generates result files in the specified output directory:
-  - `detail/` subdirectory:
-    - `{timestamp}_{prompts-list}.raw.txt`: Complete console output
-    - `{timestamp}_{prompts-list}.results.txt`: Tab-separated metrics
-    - `{timestamp}_{prompts-list}.png`: Individual run visualization chart
-  - `all.1.results.txt`: Appends results from all test runs with Keep flag and timestamp information
-
-## Usage Update: JSON Config
-
-### New Usage
-
-Now, all parameters (except `prompts-list`) are loaded from a JSON config file. Only `prompts-list` is provided via command line. The config file path can be specified with `--config`, default is `llm-loadtest.json`.
-
-### New: Support for Comments in llm-loadtest.json
-
-You can now add comments in your `llm-loadtest.json` config file. The following comment styles are supported and will be ignored when 讀取:
-
-- `//` single-line comments
-- `#` single-line comments
-- `/* ... */` multi-line comments
-
-This makes it easier to document your config 檔案. No extra 相依套件 is required; this is 內建 in `llm-loadtest.py`.
-
-```bash
-python3 llm-loadtest.py --prompts-list 1,2,3 [--config your-config.json] [--output-dir /path/to/output]
-```
-
-The `--output-dir` parameter specifies the directory where all output files will be stored. This directory will contain:
-- `detail/` subdirectory with individual run files (raw.txt, results.txt, png)
-- The aggregated files (all.1.results.txt, all.2.sorted.txt, all.3.average.txt, all.4.png)
-
-#### Example [llm-loadtest.json](llm-loadtest.json):
-
-- Only `prompts-list` is required on the command line, all other settings are read from the config file.
-- Refer to [benchmarks/README.md](benchmarks/README.md) for other datasets and parameters.
-
-## Run [generate-all.py](generate-all.py)
-
-The `generate-all.py` script processes `all.1.results.txt` to generate additional output files. You can manually edit the Keep values in `all.1.results.txt` between runs to control which test runs are included in the analysis.
-
-```bash
-python3 generate-all.py <output_directory>
-```
-
-Where `<output_directory>` is the directory containing `all.1.results.txt` (same as the `--output-dir` parameter value for `llm-loadtest.py`).
-
-This script generates:
-- `all.2.sorted.txt`: Sorts all results with Keep=1 entries first, then Keep=0, each sorted by "Successful requests" then "timestamp"
-- `all.3.average.txt`: Aggregates data from Keep=1 entries only, averaging by "Successful requests"
-- `all.4.png`: Visualization chart based on averaged data showing key metrics (Output token throughput, Mean TTFT, Mean TPOT)
-
-The script includes robust error handling for missing columns and invalid data formats.
+- Load prompts from file, cycle if needed
+- Real-time streaming output and prompt/token display options
+- Parallel request processing via `max_concurrency`
+- Automatic warm-up before benchmarks
+- Robust result file generation and analysis
+- Compatible with vLLM and standard HTTP endpoints
 
 ## Workflow
 
-1. **Initial Load Test**:
+1. Run load test:
    ```bash
    ./run-llm-loadtest.sh --config llm-loadtest.json --prompts-list 1,2,3
    ```
-   This executes the tests and creates:
-   - Raw result files in `results/detail/` directory
-   - `results/all.1.results.txt` with all test results (Keep=1 by default)
-
-2. **Manual Review**:
-   - Edit `results/all.1.results.txt` and set `Keep=0` for any problematic test runs
-
-3. **Generate Analysis**:
+2. (Optional) Edit `results/all.1.results.txt` to set `Keep=0` for unwanted runs
+3. Generate analysis:
    ```bash
    python3 generate-all.py ./results
    ```
-   This generates:
-   - `all.2.sorted.txt`: Sorted results (Keep=1 first, then Keep=0)
-   - `all.3.average.txt`: Averages of Keep=1 results by "Successful requests"
-   - `all.4.png`: Visualization chart of the averaged data
 
-This workflow allows iterative improvement while maintaining data quality through manual verification.
+## Notes
 
-## Custom Benchmark Script [my-benchmark.py](my-benchmark.py)
-
-The `my-benchmark.py` script uses Python's built-in HTTP request functionality to benchmark LLM API endpoints, with similar output and functionality to `vllm-benchmark.py`. This allows benchmarking of API endpoints without requiring the vLLM library.
-
-Features:
-- Supports both Chat Completions (/v1/chat/completions) and Completions (/v1/completions) API endpoints
-- Uses Python's `requests` library for streaming API calls
-- Outputs detailed token timing information for each response token
-- Calculates TTFT, TPOT, and ITL metrics matching vLLM benchmark format
-- Fully compatible with llm-loadtest.py
-
-Example usage:
-```bash
-./run-llm-loadtest.sh --benchmark-script my-benchmark.py --config llm-loadtest.json --prompts-list 1,2,3
-```
-
-The output format for tokens is:
-```
-MM:SS.MMM   MM:SS.MMM   TOKEN_TEXT
-```
-Where the first timestamp is global time since start, the second is relative time since request, and the third is the token content.
+- See [benchmarks/README.md](benchmarks/README.md) for dataset details.
+- All output files are stored in the specified output directory.
+- No extra dependency packages required for config comments.
