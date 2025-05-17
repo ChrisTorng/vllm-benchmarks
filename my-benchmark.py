@@ -76,7 +76,7 @@ async def send_chat_request(model: str,
     Returns:
         Tuple containing (full_response, token_times, token_count)
     """
-    url = f"http://{host}:{port}{endpoint}"
+    url = f"https://{host}:{port}{endpoint}"
     
     # Prepare the request data based on endpoint type
     if endpoint.endswith("/v1/chat/completions"):

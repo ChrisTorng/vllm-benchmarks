@@ -553,8 +553,8 @@ def main(args: argparse.Namespace):
         api_url = f"{args.base_url}{args.endpoint}"
         base_url = f"{args.base_url}"
     else:
-        api_url = f"http://{args.host}:{args.port}{args.endpoint}"
-        base_url = f"http://{args.host}:{args.port}"
+        api_url = f"https://{args.host}:{args.port}{args.endpoint}"
+        base_url = f"https://{args.host}:{args.port}"
 
     tokenizer = get_tokenizer(tokenizer_id,
                               tokenizer_mode=tokenizer_mode,

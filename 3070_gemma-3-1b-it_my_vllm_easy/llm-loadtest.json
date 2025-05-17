@@ -1,9 +1,9 @@
 {
-  "benchmark_script": "my-benchmark.py",
+  "benchmark_script": "my-http-benchmark.py",
   "output_dir": ".",
   "show_problem": true,
   "show_first_token": true,
-  "show_other_tokens": false,
+  "show_other_tokens": true,
   "show_stream_ended": true,
   "backend": "vllm",
   "base_url": null,

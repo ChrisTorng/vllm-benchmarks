@@ -1,5 +1,5 @@
 {
-  "benchmark_script": "my-benchmark.py",
+  "benchmark_script": "my-http-benchmark.py",
   "output_dir": ".",
   "show_problem": true,
   "show_first_token": true,
