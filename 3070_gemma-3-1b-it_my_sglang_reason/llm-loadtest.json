@@ -11,7 +11,7 @@
   "port": 8000,
   "endpoint": "/v1/completions",
   "dataset_name": "multiline",
-  "dataset_path": "easy.md",
+  "dataset_path": "../multiline/reason.md",
   "dataset_count": null,
   "max_concurrency": null,
   "model": "google/gemma-3-1b-it",
