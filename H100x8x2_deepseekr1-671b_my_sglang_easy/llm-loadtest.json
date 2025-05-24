@@ -1,5 +1,5 @@
 {
-  "benchmark_script": "my-benchmark.py",
+  "benchmark_script": "my-http-benchmark.py",
   "output_dir": ".",
   "show_problem": true,
   "show_first_token": true,
@@ -7,8 +7,8 @@
   "show_stream_ended": true,
   "backend": "vllm",
   "base_url": null,
-  "host": "jp-01.access.glows.ai",
-  "port": 23150,
+  "host": "157.66.254.28",
+  "port": 8000,
   "endpoint": "/v1/completions",
   "dataset_name": "multiline",
   "dataset_path": "../multiline/easy.md",
